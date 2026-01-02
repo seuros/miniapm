@@ -1,0 +1,28 @@
+services:
+  miniapm:
+    build: .
+    ports:
+      - "3001:3000"
+    volumes:
+      - miniapm_data:/data
+    environment:
+      - MINI_APM_API_KEY=dev-secret-key
+      - RUST_LOG=miniapm=info
+      - ENABLE_USER_ACCOUNTS=true
+    restart: unless-stopped
+
+  simulator:
+    build: .
+    command: miniapm simulate --continuous --requests-per-minute 30
+    environment:
+      - MINI_APM_URL=http://miniapm:3000
+      - MINI_APM_API_KEY=dev-secret-key
+      - RUST_LOG=miniapm=debug
+    depends_on:
+      - miniapm
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+
+volumes:
+  miniapm_data:

@@ -1,0 +1,11 @@
+pub mod api;
+pub mod config;
+pub mod db;
+pub mod jobs;
+pub mod mcp;
+pub mod models;
+pub mod server;
+pub mod simulator;
+pub mod web;
+
+pub use db::DbPool;

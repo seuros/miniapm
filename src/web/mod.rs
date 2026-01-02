@@ -1,0 +1,38 @@
+pub mod auth;
+mod auth_middleware;
+mod dashboard;
+mod errors;
+mod performance;
+pub mod project_context;
+mod projects;
+mod slow_requests;
+
+use axum::{middleware, routing::{get, post}, Router};
+
+use crate::DbPool;
+
+pub fn routes(pool: DbPool) -> Router<DbPool> {
+    Router::new()
+        .route("/", get(dashboard::index))
+        .route("/errors", get(errors::index))
+        .route("/errors/:id", get(errors::show))
+        .route("/performance", get(performance::index))
+        .route("/slow", get(slow_requests::index))
+        .route("/projects/switch", post(projects::switch_project))
+        .route("/projects", get(projects::index))
+        .route("/projects/create", post(projects::create))
+        .route("/projects/delete", post(projects::delete))
+        .route("/projects/regenerate-key", post(projects::regenerate_key))
+        .layer(middleware::from_fn_with_state(pool, auth_middleware::web_auth_middleware))
+}
+
+pub fn auth_routes() -> Router<DbPool> {
+    Router::new()
+        .route("/auth/login", get(auth::login_page).post(auth::login_submit))
+        .route("/auth/logout", post(auth::logout))
+        .route("/auth/change-password", get(auth::change_password_page).post(auth::change_password_submit))
+        .route("/auth/users", get(auth::users_page))
+        .route("/auth/users/create", post(auth::create_user))
+        .route("/auth/users/delete", post(auth::delete_user))
+        .route("/auth/invite/{token}", get(auth::invite_page).post(auth::invite_submit))
+}

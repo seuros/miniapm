@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+
+{% block title %}Errors - MiniAPM{% endblock %}
+
+{% block project_selector %}
+{% if ctx.projects_enabled %}
+<form method="POST" action="/projects/switch" class="project-selector">
+    <select name="slug" onchange="this.form.submit()">
+        {% for project in ctx.projects %}
+        <option value="{{ project.slug }}" {% if ctx.is_current_project(project.id) %}selected{% endif %}>
+            {{ project.name }}
+        </option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<h1>Errors</h1>
+
+<div class="filters">
+    <a href="/errors" class="{% if status_filter.is_none() %}active{% endif %}">All</a>
+    <a href="/errors?status=open" class="{% if status_filter.as_deref() == Some("open") %}active{% endif %}">Open</a>
+    <a href="/errors?status=resolved" class="{% if status_filter.as_deref() == Some("resolved") %}active{% endif %}">Resolved</a>
+    <a href="/errors?status=ignored" class="{% if status_filter.as_deref() == Some("ignored") %}active{% endif %}">Ignored</a>
+</div>
+
+{% if errors.is_empty() %}
+<p class="empty">No errors found</p>
+{% else %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Status</th>
+                <th>Exception</th>
+                <th>Message</th>
+                <th class="num">Count</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for error in errors %}
+            <tr>
+                <td><span class="badge badge-{{ error.status }}">{{ error.status }}</span></td>
+                <td><a href="/errors/{{ error.id }}">{{ error.exception_class }}</a></td>
+                <td class="truncate">{{ error.message }}</td>
+                <td class="num">{{ error.occurrence_count }}</td>
+                <td>{{ error.first_seen_at }}</td>
+                <td>{{ error.last_seen_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

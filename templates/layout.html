@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MiniAPM{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'auto';
+            if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+            else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        })();
+    </script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/">MiniAPM</a>
+        </div>
+        {% block project_selector %}{% endblock %}
+        <ul class="nav-links">
+            <li><a href="/">Dashboard</a></li>
+            <li><a href="/errors">Errors</a></li>
+            <li><a href="/performance">Performance</a></li>
+            <li><a href="/slow">Slow Requests</a></li>
+            <li><a href="/projects" class="nav-admin">Projects</a></li>
+            <li><a href="/auth/users" class="nav-admin">Users</a></li>
+        </ul>
+        <div class="nav-right">
+            <form method="POST" action="/auth/logout" class="nav-logout-form">
+                <button type="submit" class="nav-logout">Logout</button>
+            </form>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                <span class="theme-icon"></span>
+            </button>
+        </div>
+    </nav>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            let next;
+            if (current === 'dark') next = 'light';
+            else if (current === 'light') next = 'auto';
+            else next = 'dark';
+
+            if (next === 'auto') {
+                html.removeAttribute('data-theme');
+                localStorage.removeItem('theme');
+            } else {
+                html.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+            }
+        }
+    </script>
+</body>
+</html>

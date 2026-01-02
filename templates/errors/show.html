@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+
+{% block title %}Error Details - MiniAPM{% endblock %}
+
+{% block project_selector %}
+{% if ctx.projects_enabled %}
+<form method="POST" action="/projects/switch" class="project-selector">
+    <select name="slug" onchange="this.form.submit()">
+        {% for project in ctx.projects %}
+        <option value="{{ project.slug }}" {% if ctx.is_current_project(project.id) %}selected{% endif %}>
+            {{ project.name }}
+        </option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+{% match error %}
+{% when Some with (e) %}
+<h1>{{ e.exception_class }}</h1>
+
+<div class="error-meta">
+    <span class="badge badge-{{ e.status }}">{{ e.status }}</span>
+    <span>{{ e.occurrence_count }} occurrences</span>
+    <span>First: {{ e.first_seen_at }}</span>
+    <span>Last: {{ e.last_seen_at }}</span>
+</div>
+
+<div class="card">
+    <h2>Message</h2>
+    <pre class="error-message">{{ e.message }}</pre>
+</div>
+
+<div class="card">
+    <h2>Recent Occurrences</h2>
+    {% if occurrences.is_empty() %}
+    <p class="empty">No occurrences found</p>
+    {% else %}
+    {% for occ in occurrences %}
+    <div class="occurrence">
+        <div class="occurrence-header">
+            <span>{{ occ.happened_at }}</span>
+            {% if let Some(user_id) = occ.user_id.as_ref() %}
+            <span>User: {{ user_id }}</span>
+            {% endif %}
+        </div>
+        <pre class="backtrace">{% for line in occ.backtrace %}{{ line }}
+{% endfor %}</pre>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+{% when None %}
+<h1>Error not found</h1>
+<p><a href="/errors">Back to errors</a></p>
+{% endmatch %}
+{% endblock %}
