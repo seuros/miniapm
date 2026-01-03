@@ -100,6 +100,15 @@ async fn main() -> anyhow::Result<()> {
             days,
             continuous,
         }) => {
+            // Get API key from database if not set via env var
+            let mut config = config;
+            if config.api_key.is_none() {
+                let pool = db::init(&config)?;
+                let default_project = miniapm::models::project::ensure_default_project(&pool)?;
+                config.api_key = Some(default_project.api_key);
+                tracing::info!("Using API key from default project");
+            }
+
             if backfill {
                 simulator::backfill(&config, days, requests_per_minute * 60 * 24).await?;
             } else {
