@@ -1220,8 +1220,9 @@ td.actions form.inline {
     top: 50%;
     transform: translateY(-50%);
     font-size: 0.6875rem;
-    color: var(--text-muted);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 3px var(--bg);
 }
 
 /* Status Codes */
@@ -1585,6 +1586,7 @@ td.actions form.inline {
 
 /* Span Details Panel */
 .span-details {
+    margin-top: 1.5rem;
     padding: 0.75rem 1rem 1rem;
     background: var(--bg);
     border-top: 1px solid var(--border);
