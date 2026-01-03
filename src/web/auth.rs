@@ -101,6 +101,8 @@ pub async fn login_submit(
                     let cookie = Cookie::build((SESSION_COOKIE, token))
                         .path("/")
                         .http_only(true)
+                        .secure(true)
+                        .same_site(axum_extra::extract::cookie::SameSite::Lax)
                         .max_age(Duration::days(7))
                         .build();
 
@@ -498,6 +500,8 @@ pub async fn invite_submit(
             let cookie = Cookie::build((SESSION_COOKIE, session_token))
                 .path("/")
                 .http_only(true)
+                .secure(true)
+                .same_site(axum_extra::extract::cookie::SameSite::Lax)
                 .max_age(Duration::days(7))
                 .build();
 

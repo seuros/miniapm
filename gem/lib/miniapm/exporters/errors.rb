@@ -4,43 +4,33 @@ module MiniAPM
   module Exporters
     class Errors
       class << self
-        # Export a single error
-        def export(error_event)
+        # Export multiple errors in a single batch request
+        def export_batch(error_events)
+          return { success: true } if error_events.empty?
+
           config = MiniAPM.configuration
           return { success: false, error: "No API key" } unless config.api_key
 
-          # Server expects single error payload matching IncomingError struct
-          payload = error_event.to_h
+          # Send as a batch array
+          payload = { errors: error_events.map(&:to_h) }
 
           result = Transport::HTTP.post(
-            "#{config.endpoint}/ingest/errors",
+            "#{config.endpoint}/ingest/errors/batch",
             payload,
             headers: auth_headers(config)
           )
 
           if result[:success]
-            MiniAPM.logger.debug { "MiniAPM: Reported error" }
+            MiniAPM.logger.debug { "MiniAPM: Reported #{error_events.size} error(s)" }
           else
-            MiniAPM.logger.debug { "MiniAPM: Failed to report error: #{result[:status]}" }
+            MiniAPM.logger.warn { "MiniAPM: Failed to report errors: #{result[:status]}" }
           end
 
-          result
-        end
-
-        # Export multiple errors (sends each individually)
-        def export_batch(error_events)
-          return { success: true } if error_events.empty?
-
-          results = error_events.map { |error| export(error) }
-
-          # Return success if any succeeded
-          success_count = results.count { |r| r[:success] }
-
           {
-            success: success_count > 0,
-            sent: success_count,
-            failed: results.size - success_count,
-            status: results.last&.dig(:status)
+            success: result[:success],
+            sent: result[:success] ? error_events.size : 0,
+            failed: result[:success] ? 0 : error_events.size,
+            status: result[:status]
           }
         end
 

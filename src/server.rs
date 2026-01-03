@@ -1,9 +1,11 @@
 use axum::{
+    extract::DefaultBodyLimit,
     middleware,
     routing::{get, post},
     Router,
 };
 use std::net::SocketAddr;
+use tokio::signal;
 use tower_cookies::CookieManagerLayer;
 use tower_http::trace::TraceLayer;
 
@@ -15,6 +17,9 @@ pub struct AppState {
     pub pool: DbPool,
     pub config: Config,
 }
+
+/// Maximum request body size (10 MB)
+const MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
 
 pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> {
     // Initialize start time for uptime tracking
@@ -42,8 +47,15 @@ pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> 
             Router::new()
                 .route("/requests", post(api::ingest_requests))
                 .route("/errors", post(api::ingest_errors))
+                .route("/errors/batch", post(api::ingest_errors_batch))
                 .route("/deploys", post(api::ingest_deploys))
                 .route("/v1/traces", post(api::ingest_spans))
+                .layer(middleware::from_fn_with_state(pool.clone(), api::auth_middleware)),
+        )
+        // MCP API (with API key auth)
+        .route(
+            "/mcp",
+            post(api::mcp_handler)
                 .layer(middleware::from_fn_with_state(pool.clone(), api::auth_middleware)),
         )
         // Auth routes (always available)
@@ -54,6 +66,7 @@ pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> 
         .nest_service("/static", tower_http::services::ServeDir::new("static"))
         // State and middleware
         .with_state(pool)
+        .layer(DefaultBodyLimit::max(MAX_BODY_SIZE))
         .layer(CookieManagerLayer::new())
         .layer(TraceLayer::new_for_http());
 
@@ -65,7 +78,40 @@ pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> 
     }
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
 
+    // Graceful shutdown
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    tracing::info!("Server shutdown complete");
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("Failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            tracing::info!("Received Ctrl+C, starting graceful shutdown...");
+        }
+        _ = terminate => {
+            tracing::info!("Received SIGTERM, starting graceful shutdown...");
+        }
+    }
 }

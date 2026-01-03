@@ -21,17 +21,39 @@
 {% when Some with (e) %}
 <h1>{{ e.exception_class }}</h1>
 
-<div class="error-meta">
-    <span class="badge badge-{{ e.status }}">{{ e.status }}</span>
-    <span>{{ e.occurrence_count }} occurrences</span>
-    <span>First: {{ e.first_seen_at }}</span>
-    <span>Last: {{ e.last_seen_at }}</span>
-    {% if !trend_24h.is_empty() %}
-    <span class="error-sparkline-container">
-        <span class="sparkline-label">24h:</span>
-        <canvas id="errorSparkline" width="100" height="24"></canvas>
-    </span>
-    {% endif %}
+<div class="error-header">
+    <div class="error-meta">
+        <span class="badge badge-{{ e.status }}">{{ e.status }}</span>
+        <span>{{ e.occurrence_count }} occurrences</span>
+        <span>First: {{ e.first_seen_at }}</span>
+        <span>Last: {{ e.last_seen_at }}</span>
+        {% if !trend_24h.is_empty() %}
+        <span class="error-sparkline-container">
+            <span class="sparkline-label">24h:</span>
+            <canvas id="errorSparkline" width="100" height="24"></canvas>
+        </span>
+        {% endif %}
+    </div>
+    <div class="error-actions">
+        {% if e.status != "resolved" %}
+        <form method="POST" action="/errors/{{ e.id }}/status" class="inline-status-form">
+            <input type="hidden" name="status" value="resolved">
+            <button type="submit" class="btn btn-success btn-sm">Mark Resolved</button>
+        </form>
+        {% endif %}
+        {% if e.status != "ignored" %}
+        <form method="POST" action="/errors/{{ e.id }}/status" class="inline-status-form">
+            <input type="hidden" name="status" value="ignored">
+            <button type="submit" class="btn btn-muted btn-sm">Ignore</button>
+        </form>
+        {% endif %}
+        {% if e.status != "open" %}
+        <form method="POST" action="/errors/{{ e.id }}/status" class="inline-status-form">
+            <input type="hidden" name="status" value="open">
+            <button type="submit" class="btn btn-outline btn-sm">Reopen</button>
+        </form>
+        {% endif %}
+    </div>
 </div>
 
 {% if !trend_24h.is_empty() %}

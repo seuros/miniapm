@@ -314,13 +314,15 @@ pub fn routes_summary_filtered(
 ) -> anyhow::Result<Vec<RouteSummary>> {
     let conn = pool.get()?;
 
+    // p95 and p99 are computed in Rust after SQL, so we can't sort by them in SQL
+    let needs_rust_sort = sort_by == "p95" || sort_by == "p99";
+
     let order_clause = match sort_by {
         "avg" => "avg_ms DESC",
-        "p95" => "p95_ms DESC",
-        "p99" => "p99_ms DESC",
         "max" => "max_ms DESC",
         "errors" => "error_count DESC",
         "db" => "avg_db_ms DESC",
+        "p95" | "p99" => "request_count DESC", // Fetch by request count, sort later in Rust
         _ => "request_count DESC", // default: requests
     };
 
@@ -390,6 +392,15 @@ pub fn routes_summary_filtered(
             error_count,
             error_rate,
         });
+    }
+
+    // Sort by p95/p99 in Rust since they're computed after SQL
+    if needs_rust_sort {
+        match sort_by {
+            "p95" => result.sort_by(|a, b| b.p95_ms.cmp(&a.p95_ms)),
+            "p99" => result.sort_by(|a, b| b.p99_ms.cmp(&a.p99_ms)),
+            _ => {}
+        }
     }
 
     Ok(result)

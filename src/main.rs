@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let config = Config::from_env();
+    let config = Config::from_env()?;
 
     match cli.command {
         Some(Commands::Server { port }) => {
@@ -112,7 +112,14 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::McpConfig) => {
             let exe_path = std::env::current_exe()?;
-            let config_json = serde_json::json!({
+            let pool = db::init(&config)?;
+            let default_project = miniapm::models::project::ensure_default_project(&pool)?;
+
+            println!("# MCP Configuration for MiniAPM\n");
+            println!("## Option 1: Stdio (for Claude Desktop)\n");
+            println!("Add to ~/.config/claude/claude_desktop_config.json:\n");
+
+            let stdio_config = serde_json::json!({
                 "mcpServers": {
                     "miniapm": {
                         "command": exe_path.to_string_lossy(),
@@ -123,7 +130,18 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             });
-            println!("{}", serde_json::to_string_pretty(&config_json)?);
+            println!("{}\n", serde_json::to_string_pretty(&stdio_config)?);
+
+            println!("## Option 2: HTTP (for remote access)\n");
+            println!("Endpoint: POST {}/mcp", config.mini_apm_url);
+            println!("Authorization: Bearer {}\n", default_project.api_key);
+            println!("Example request:");
+            println!("```bash");
+            println!("curl -X POST {}/mcp \\", config.mini_apm_url);
+            println!("  -H 'Authorization: Bearer {}' \\", default_project.api_key);
+            println!("  -H 'Content-Type: application/json' \\");
+            println!("  -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}}'");
+            println!("```");
         }
         None => {
             // Default to server

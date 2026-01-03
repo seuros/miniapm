@@ -10,6 +10,10 @@ module MiniAPM
       BASE_RETRY_DELAY = 1.0 # seconds
       MAX_CONCURRENT_SENDS = 4
 
+      # Circuit breaker settings
+      CIRCUIT_FAILURE_THRESHOLD = 5  # failures before opening circuit
+      CIRCUIT_RESET_TIMEOUT = 60     # seconds before trying again
+
       class << self
         def start!
           @start_mutex ||= Mutex.new
@@ -123,8 +127,45 @@ module MiniAPM
               sent: { span: 0, error: 0 },
               dropped: { span: 0, error: 0 },
               failed: { span: 0, error: 0 },
-              retries: 0
+              retries: 0,
+              circuit_opened: 0
             }
+            # Circuit breaker state
+            @circuit_failures = 0
+            @circuit_opened_at = nil
+          end
+        end
+
+        # Check if circuit breaker allows requests
+        def circuit_open?
+          @mutex.synchronize do
+            return false if @circuit_failures < CIRCUIT_FAILURE_THRESHOLD
+
+            # Check if we should try again (half-open state)
+            if @circuit_opened_at && (Time.now - @circuit_opened_at) >= CIRCUIT_RESET_TIMEOUT
+              MiniAPM.logger.info { "MiniAPM: Circuit breaker half-open, attempting request" }
+              return false
+            end
+
+            true
+          end
+        end
+
+        def record_circuit_success!
+          @mutex.synchronize do
+            @circuit_failures = 0
+            @circuit_opened_at = nil
+          end
+        end
+
+        def record_circuit_failure!
+          @mutex.synchronize do
+            @circuit_failures += 1
+            if @circuit_failures >= CIRCUIT_FAILURE_THRESHOLD && @circuit_opened_at.nil?
+              @circuit_opened_at = Time.now
+              @stats[:circuit_opened] += 1
+              MiniAPM.logger.warn { "MiniAPM: Circuit breaker opened after #{@circuit_failures} failures" }
+            end
           end
         end
 
@@ -240,6 +281,13 @@ module MiniAPM
         end
 
         def send_with_retry(type, items)
+          # Check circuit breaker first
+          if circuit_open?
+            MiniAPM.logger.debug { "MiniAPM: Circuit open, dropping #{items.size} #{type}(s)" }
+            increment_stat(:dropped, type)
+            return false
+          end
+
           attempts = 0
 
           loop do
@@ -248,6 +296,7 @@ module MiniAPM
 
             if result[:success]
               @mutex.synchronize { @stats[:sent][type] += items.size }
+              record_circuit_success!
               return true
             end
 
@@ -262,6 +311,7 @@ module MiniAPM
             if attempts >= MAX_RETRY_ATTEMPTS
               MiniAPM.logger.error { "MiniAPM: Failed to send #{type} after #{attempts} attempts" }
               increment_stat(:failed, type)
+              record_circuit_failure!
               return false
             end
 

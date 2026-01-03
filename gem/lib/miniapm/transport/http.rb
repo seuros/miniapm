@@ -36,7 +36,7 @@ module MiniAPM
             success: response.is_a?(Net::HTTPSuccess)
           }
         rescue StandardError => e
-          MiniAPM.logger.debug { "MiniAPM HTTP error: #{e.class}: #{e.message}" }
+          MiniAPM.logger.warn { "MiniAPM HTTP error: #{e.class}: #{e.message}" }
           { status: 0, body: e.message, success: false, error: e }
         end
       end

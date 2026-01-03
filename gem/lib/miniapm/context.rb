@@ -1,27 +1,52 @@
 # frozen_string_literal: true
 
 module MiniAPM
-  # Thread-safe context for trace propagation
-  # Uses Thread.current with fiber-aware storage
+  # Fiber-safe context for trace propagation
+  # Uses Fiber.[] storage (Ruby 3.2+) with Thread.current fallback
   module Context
     TRACE_KEY = :miniapm_trace
     SPAN_STACK_KEY = :miniapm_span_stack
 
     class << self
-      def current_trace
-        Thread.current[TRACE_KEY]
-      end
+      # Ruby 3.2+ has Fiber.[] for fiber-local storage
+      # Fall back to Thread.current for older Ruby (not fiber-safe)
+      if Fiber.respond_to?(:[])
+        def current_trace
+          Fiber[TRACE_KEY]
+        end
 
-      def current_trace=(trace)
-        Thread.current[TRACE_KEY] = trace
+        def current_trace=(trace)
+          Fiber[TRACE_KEY] = trace
+        end
+
+        def span_stack
+          Fiber[SPAN_STACK_KEY] ||= []
+        end
+
+        def span_stack=(stack)
+          Fiber[SPAN_STACK_KEY] = stack
+        end
+      else
+        # Fallback for Ruby < 3.2 (not fiber-safe, but thread-safe)
+        def current_trace
+          Thread.current[TRACE_KEY]
+        end
+
+        def current_trace=(trace)
+          Thread.current[TRACE_KEY] = trace
+        end
+
+        def span_stack
+          Thread.current[SPAN_STACK_KEY] ||= []
+        end
+
+        def span_stack=(stack)
+          Thread.current[SPAN_STACK_KEY] = stack
+        end
       end
 
       def current_trace_id
         current_trace&.trace_id
-      end
-
-      def span_stack
-        Thread.current[SPAN_STACK_KEY] ||= []
       end
 
       def current_span
@@ -45,20 +70,24 @@ module MiniAPM
 
       def with_trace(trace)
         old_trace = current_trace
-        old_stack = Thread.current[SPAN_STACK_KEY]
+        old_stack = span_stack
 
         self.current_trace = trace
-        Thread.current[SPAN_STACK_KEY] = []
+        self.span_stack = []
 
         yield trace
       ensure
         self.current_trace = old_trace
-        Thread.current[SPAN_STACK_KEY] = old_stack
+        self.span_stack = old_stack
       end
 
       def clear!
-        Thread.current[TRACE_KEY] = nil
-        Thread.current[SPAN_STACK_KEY] = nil
+        self.current_trace = nil
+        self.span_stack = nil
+      end
+
+      def fiber_safe?
+        Fiber.respond_to?(:[])
       end
 
       # Extract trace context from incoming HTTP headers (W3C Trace Context)

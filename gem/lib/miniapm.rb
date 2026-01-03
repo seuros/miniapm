@@ -117,7 +117,12 @@ module MiniAPM
       return unless enabled?
       return unless Context.current_trace&.sampled?
 
-      span = configuration.before_send&.call(span) || span
+      span = begin
+        configuration.before_send&.call(span) || span
+      rescue StandardError => e
+        logger.error { "MiniAPM before_send callback error: #{e.class}: #{e.message}" }
+        span # Return original span if callback fails
+      end
       return unless span
 
       Transport::BatchSender.enqueue(:span, span)

@@ -18,6 +18,7 @@ pub fn routes(pool: DbPool) -> Router<DbPool> {
         .route("/", get(dashboard::index))
         .route("/errors", get(errors::index))
         .route("/errors/:id", get(errors::show))
+        .route("/errors/:id/status", post(errors::update_status))
         .route("/traces", get(traces::index))
         .route("/traces/:trace_id", get(traces::show))
         .route("/performance", get(performance::index))
@@ -42,3 +43,4 @@ pub fn auth_routes() -> Router<DbPool> {
         .route("/auth/users/delete", post(auth::delete_user))
         .route("/auth/invite/{token}", get(auth::invite_page).post(auth::invite_submit))
 }
+

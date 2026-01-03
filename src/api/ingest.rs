@@ -40,6 +40,43 @@ pub async fn ingest_errors(
     }
 }
 
+#[derive(serde::Deserialize)]
+pub struct ErrorBatch {
+    pub errors: Vec<app_error::IncomingError>,
+}
+
+pub async fn ingest_errors_batch(
+    State(pool): State<DbPool>,
+    Extension(ctx): Extension<ProjectContext>,
+    Json(batch): Json<ErrorBatch>,
+) -> StatusCode {
+    let mut success_count = 0;
+    let mut error_count = 0;
+
+    for error in &batch.errors {
+        match app_error::insert(&pool, error, ctx.project_id) {
+            Ok(_) => success_count += 1,
+            Err(e) => {
+                tracing::error!("Failed to ingest error in batch: {}", e);
+                error_count += 1;
+            }
+        }
+    }
+
+    tracing::debug!(
+        "Ingested {} errors, {} failed (project_id={:?})",
+        success_count,
+        error_count,
+        ctx.project_id
+    );
+
+    if error_count > 0 && success_count == 0 {
+        StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::ACCEPTED
+    }
+}
+
 pub async fn ingest_spans(
     State(pool): State<DbPool>,
     Extension(ctx): Extension<ProjectContext>,

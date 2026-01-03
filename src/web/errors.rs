@@ -1,5 +1,7 @@
 use askama::Template;
 use axum::extract::{Path, Query, State};
+use axum::response::Redirect;
+use axum::Form;
 use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tower_cookies::Cookies;
@@ -117,4 +119,22 @@ pub async fn show(State(pool): State<DbPool>, cookies: Cookies, Path(id): Path<i
     let trend_24h = models::error::error_trend_24h(&pool, id).unwrap_or_default();
 
     ErrorShowTemplate { error, occurrences, trend_24h, ctx }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStatusForm {
+    pub status: String,
+}
+
+pub async fn update_status(
+    State(pool): State<DbPool>,
+    Path(id): Path<i64>,
+    Form(form): Form<UpdateStatusForm>,
+) -> Redirect {
+    // Validate status
+    let valid_statuses = ["open", "resolved", "ignored"];
+    if valid_statuses.contains(&form.status.as_str()) {
+        let _ = models::error::update_status(&pool, id, &form.status);
+    }
+    Redirect::to(&format!("/errors/{}", id))
 }

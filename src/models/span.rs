@@ -102,7 +102,7 @@ pub enum SpanCategory {
     View,
     Search,
     Job,
-    Rake,
+    Command,
     Internal,
 }
 
@@ -166,11 +166,14 @@ impl SpanCategory {
             return SpanCategory::Job;
         }
 
+        // Command runners: rake, thor, make, etc.
         if name_lower.starts_with("rake:")
             || name_lower.starts_with("rake ")
             || name_lower.contains("rake::task")
+            || name_lower.starts_with("thor:")
+            || name_lower.starts_with("make:")
         {
-            return SpanCategory::Rake;
+            return SpanCategory::Command;
         }
 
         SpanCategory::Internal
@@ -184,7 +187,7 @@ impl SpanCategory {
             SpanCategory::View => "view",
             SpanCategory::Search => "search",
             SpanCategory::Job => "job",
-            SpanCategory::Rake => "rake",
+            SpanCategory::Command => "command",
             SpanCategory::Internal => "internal",
         }
     }
@@ -197,7 +200,7 @@ impl SpanCategory {
             "view" => SpanCategory::View,
             "search" => SpanCategory::Search,
             "job" => SpanCategory::Job,
-            "rake" => SpanCategory::Rake,
+            "command" => SpanCategory::Command,
             _ => SpanCategory::Internal,
         }
     }
@@ -208,7 +211,7 @@ impl SpanCategory {
 pub enum RootSpanType {
     Web,
     Job,
-    Rake,
+    Command,
 }
 
 impl RootSpanType {
@@ -216,7 +219,7 @@ impl RootSpanType {
         match category {
             SpanCategory::HttpServer => Some(RootSpanType::Web),
             SpanCategory::Job => Some(RootSpanType::Job),
-            SpanCategory::Rake => Some(RootSpanType::Rake),
+            SpanCategory::Command => Some(RootSpanType::Command),
             _ => None,
         }
     }
@@ -225,7 +228,7 @@ impl RootSpanType {
         match self {
             RootSpanType::Web => "web",
             RootSpanType::Job => "job",
-            RootSpanType::Rake => "rake",
+            RootSpanType::Command => "command",
         }
     }
 
@@ -233,7 +236,7 @@ impl RootSpanType {
         match s {
             "web" => Some(RootSpanType::Web),
             "job" => Some(RootSpanType::Job),
-            "rake" => Some(RootSpanType::Rake),
+            "command" => Some(RootSpanType::Command),
             _ => None,
         }
     }
@@ -256,6 +259,70 @@ pub struct TraceSummary {
     pub http_url: Option<String>,
     pub http_status_code: Option<i32>,
     pub happened_at: String,
+}
+
+impl TraceSummary {
+    /// Returns a clean, human-readable name for the trace
+    pub fn display_name(&self) -> String {
+        // For web requests, show "METHOD /path"
+        if let Some(ref method) = self.http_method {
+            // Extract just the path from the URL if present
+            let path = self.http_url.as_ref()
+                .and_then(|url| {
+                    // Parse URL to get just the path
+                    if let Some(pos) = url.find("://") {
+                        let after_scheme = &url[pos + 3..];
+                        after_scheme.find('/').map(|p| &after_scheme[p..])
+                    } else if url.starts_with('/') {
+                        Some(url.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| {
+                    // Fallback: extract path from span name if it starts with method
+                    let name = &self.root_span_name;
+                    if name.starts_with(method) {
+                        name[method.len()..].trim()
+                    } else {
+                        name.as_str()
+                    }
+                });
+
+            format!("{} {}", method, path)
+        } else {
+            // For jobs/rake tasks, just use the span name as-is
+            self.root_span_name.clone()
+        }
+    }
+
+    /// Returns a CSS class for the status
+    pub fn status_class(&self) -> &'static str {
+        if let Some(code) = self.http_status_code {
+            if code >= 500 {
+                "status-error"
+            } else if code >= 400 {
+                "status-warning"
+            } else {
+                "status-ok"
+            }
+        } else if self.status_code == 2 {
+            "status-error"
+        } else {
+            "status-ok"
+        }
+    }
+
+    /// Returns a human-readable status label
+    pub fn status_label(&self) -> String {
+        if let Some(code) = self.http_status_code {
+            code.to_string()
+        } else if self.status_code == 2 {
+            "Error".to_string()
+        } else {
+            "OK".to_string()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -876,5 +943,220 @@ mod tests {
     fn test_normalize_sql_in_clause() {
         let sql = "SELECT * FROM users WHERE id IN (1, 2, 3)";
         assert_eq!(normalize_sql(sql), "SELECT * FROM users WHERE id IN (?, ?, ?)");
+    }
+
+    // SpanCategory tests
+    #[test]
+    fn test_span_category_db() {
+        let mut attrs = HashMap::new();
+        attrs.insert("db.system".to_string(), "postgresql".to_string());
+        assert_eq!(SpanCategory::from_attributes("SELECT users", 0, &attrs), SpanCategory::Db);
+    }
+
+    #[test]
+    fn test_span_category_elasticsearch() {
+        let mut attrs = HashMap::new();
+        attrs.insert("db.system".to_string(), "elasticsearch".to_string());
+        assert_eq!(SpanCategory::from_attributes("search", 0, &attrs), SpanCategory::Search);
+    }
+
+    #[test]
+    fn test_span_category_http_server() {
+        let mut attrs = HashMap::new();
+        attrs.insert("http.method".to_string(), "GET".to_string());
+        assert_eq!(SpanCategory::from_attributes("GET /users", 2, &attrs), SpanCategory::HttpServer);
+    }
+
+    #[test]
+    fn test_span_category_http_client() {
+        let mut attrs = HashMap::new();
+        attrs.insert("http.url".to_string(), "https://api.example.com".to_string());
+        assert_eq!(SpanCategory::from_attributes("HTTP GET", 3, &attrs), SpanCategory::HttpClient);
+    }
+
+    #[test]
+    fn test_span_category_job() {
+        let mut attrs = HashMap::new();
+        attrs.insert("messaging.system".to_string(), "sidekiq".to_string());
+        assert_eq!(SpanCategory::from_attributes("MyJob.perform", 0, &attrs), SpanCategory::Job);
+    }
+
+    #[test]
+    fn test_span_category_command_rake() {
+        let attrs = HashMap::new();
+        assert_eq!(SpanCategory::from_attributes("rake db:migrate", 0, &attrs), SpanCategory::Command);
+        assert_eq!(SpanCategory::from_attributes("rake:db:migrate", 0, &attrs), SpanCategory::Command);
+    }
+
+    #[test]
+    fn test_span_category_command_thor() {
+        let attrs = HashMap::new();
+        assert_eq!(SpanCategory::from_attributes("thor:generate:model", 0, &attrs), SpanCategory::Command);
+    }
+
+    #[test]
+    fn test_span_category_view() {
+        let attrs = HashMap::new();
+        assert_eq!(SpanCategory::from_attributes("render_template users/index.html.erb", 0, &attrs), SpanCategory::View);
+        assert_eq!(SpanCategory::from_attributes("render_partial _header.html.erb", 0, &attrs), SpanCategory::View);
+    }
+
+    #[test]
+    fn test_span_category_roundtrip() {
+        for category in [
+            SpanCategory::HttpServer,
+            SpanCategory::HttpClient,
+            SpanCategory::Db,
+            SpanCategory::View,
+            SpanCategory::Search,
+            SpanCategory::Job,
+            SpanCategory::Command,
+            SpanCategory::Internal,
+        ] {
+            assert_eq!(SpanCategory::from_str(category.as_str()), category);
+        }
+    }
+
+    // RootSpanType tests
+    #[test]
+    fn test_root_span_type_from_category() {
+        assert_eq!(RootSpanType::from_category(SpanCategory::HttpServer), Some(RootSpanType::Web));
+        assert_eq!(RootSpanType::from_category(SpanCategory::Job), Some(RootSpanType::Job));
+        assert_eq!(RootSpanType::from_category(SpanCategory::Command), Some(RootSpanType::Command));
+        assert_eq!(RootSpanType::from_category(SpanCategory::Db), None);
+        assert_eq!(RootSpanType::from_category(SpanCategory::Internal), None);
+    }
+
+    #[test]
+    fn test_root_span_type_roundtrip() {
+        for root_type in [RootSpanType::Web, RootSpanType::Job, RootSpanType::Command] {
+            assert_eq!(RootSpanType::from_str(root_type.as_str()), Some(root_type));
+        }
+        assert_eq!(RootSpanType::from_str("invalid"), None);
+    }
+
+    // TraceSummary display tests
+    fn make_trace_summary(
+        root_span_name: &str,
+        http_method: Option<&str>,
+        http_url: Option<&str>,
+        http_status_code: Option<i32>,
+        status_code: i32,
+    ) -> TraceSummary {
+        TraceSummary {
+            trace_id: "abc123".to_string(),
+            root_span_name: root_span_name.to_string(),
+            root_span_type: Some(RootSpanType::Web),
+            duration_ms: 100.0,
+            span_count: 5,
+            status_code,
+            service_name: None,
+            http_method: http_method.map(|s| s.to_string()),
+            http_url: http_url.map(|s| s.to_string()),
+            http_status_code,
+            happened_at: "2024-01-01 12:00".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_display_name_with_full_url() {
+        let trace = make_trace_summary(
+            "GET /users",
+            Some("GET"),
+            Some("https://example.com/users"),
+            Some(200),
+            1,
+        );
+        assert_eq!(trace.display_name(), "GET /users");
+    }
+
+    #[test]
+    fn test_display_name_with_path_only() {
+        let trace = make_trace_summary(
+            "GET /orders",
+            Some("GET"),
+            Some("/orders"),
+            Some(200),
+            1,
+        );
+        assert_eq!(trace.display_name(), "GET /orders");
+    }
+
+    #[test]
+    fn test_display_name_extracts_from_span_name() {
+        let trace = make_trace_summary(
+            "POST /api/items",
+            Some("POST"),
+            None,
+            Some(201),
+            1,
+        );
+        assert_eq!(trace.display_name(), "POST /api/items");
+    }
+
+    #[test]
+    fn test_display_name_job_without_http() {
+        let trace = TraceSummary {
+            trace_id: "abc123".to_string(),
+            root_span_name: "OrderMailer.confirmation_email".to_string(),
+            root_span_type: Some(RootSpanType::Job),
+            duration_ms: 100.0,
+            span_count: 5,
+            status_code: 1,
+            service_name: None,
+            http_method: None,
+            http_url: None,
+            http_status_code: None,
+            happened_at: "2024-01-01 12:00".to_string(),
+        };
+        assert_eq!(trace.display_name(), "OrderMailer.confirmation_email");
+    }
+
+    #[test]
+    fn test_status_class_success() {
+        let trace = make_trace_summary("GET /", Some("GET"), None, Some(200), 1);
+        assert_eq!(trace.status_class(), "status-ok");
+    }
+
+    #[test]
+    fn test_status_class_client_error() {
+        let trace = make_trace_summary("GET /", Some("GET"), None, Some(404), 1);
+        assert_eq!(trace.status_class(), "status-warning");
+    }
+
+    #[test]
+    fn test_status_class_server_error() {
+        let trace = make_trace_summary("GET /", Some("GET"), None, Some(500), 2);
+        assert_eq!(trace.status_class(), "status-error");
+    }
+
+    #[test]
+    fn test_status_class_otlp_error() {
+        let trace = make_trace_summary("process", None, None, None, 2);
+        assert_eq!(trace.status_class(), "status-error");
+    }
+
+    #[test]
+    fn test_status_class_ok_without_http() {
+        let trace = make_trace_summary("process", None, None, None, 1);
+        assert_eq!(trace.status_class(), "status-ok");
+    }
+
+    #[test]
+    fn test_status_label_http_code() {
+        let trace = make_trace_summary("GET /", Some("GET"), None, Some(201), 1);
+        assert_eq!(trace.status_label(), "201");
+    }
+
+    #[test]
+    fn test_status_label_error() {
+        let trace = make_trace_summary("process", None, None, None, 2);
+        assert_eq!(trace.status_label(), "Error");
+    }
+
+    #[test]
+    fn test_status_label_ok() {
+        let trace = make_trace_summary("process", None, None, None, 1);
+        assert_eq!(trace.status_label(), "OK");
     }
 }
