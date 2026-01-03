@@ -9,9 +9,8 @@
     <link rel="stylesheet" href="/static/style.css">
     <script>
         (function() {
-            const theme = localStorage.getItem('theme') || 'auto';
-            if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-            else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
         })();
     </script>
 </head>
@@ -72,18 +71,9 @@
         function toggleTheme() {
             const html = document.documentElement;
             const current = html.getAttribute('data-theme');
-            let next;
-            if (current === 'dark') next = 'light';
-            else if (current === 'light') next = 'auto';
-            else next = 'dark';
-
-            if (next === 'auto') {
-                html.removeAttribute('data-theme');
-                localStorage.removeItem('theme');
-            } else {
-                html.setAttribute('data-theme', next);
-                localStorage.setItem('theme', next);
-            }
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
         }
 
         function toggleNavMenu() {
