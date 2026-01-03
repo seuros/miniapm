@@ -42,22 +42,28 @@
     </div>
 </div>
 
-{% if !hourly_stats.is_empty() %}
 <div class="grid-2">
     <section class="card chart-card">
         <h2>Traffic (24h)</h2>
         <div class="chart-container" id="traffic-chart">
+            {% if hourly_stats.is_empty() %}
+            <div class="chart-empty">No data yet</div>
+            {% else %}
             <canvas id="trafficCanvas"></canvas>
+            {% endif %}
         </div>
     </section>
     <section class="card chart-card">
         <h2>Avg Latency (24h)</h2>
         <div class="chart-container" id="latency-chart">
+            {% if hourly_stats.is_empty() %}
+            <div class="chart-empty">No data yet</div>
+            {% else %}
             <canvas id="latencyCanvas"></canvas>
+            {% endif %}
         </div>
     </section>
 </div>
-{% endif %}
 
 <div class="grid-2">
     <section class="card">
