@@ -5,7 +5,7 @@ use axum::{
 };
 use tower_cookies::Cookies;
 
-use crate::{models::settings, DbPool};
+use crate::{models::project, DbPool};
 
 use super::project_context::{get_project_context, WebProjectContext};
 
@@ -22,8 +22,9 @@ pub async fn index(
 ) -> ApiKeyTemplate {
     let ctx = get_project_context(&pool, &cookies);
 
-    // Get or create the API key
-    let api_key = settings::get_or_create_api_key(&pool)
+    // Get the default project's API key
+    let api_key = project::ensure_default_project(&pool)
+        .map(|p| p.api_key)
         .unwrap_or_else(|_| "Error loading API key".to_string());
 
     ApiKeyTemplate { api_key, ctx }
@@ -32,7 +33,10 @@ pub async fn index(
 pub async fn regenerate(
     State(pool): State<DbPool>,
 ) -> impl IntoResponse {
-    let _ = settings::regenerate_api_key(&pool);
+    // Get the default project and regenerate its key
+    if let Ok(project) = project::ensure_default_project(&pool) {
+        let _ = project::regenerate_api_key(&pool, project.id);
+    }
     Redirect::to("/api-key")
 }
 
@@ -57,7 +61,6 @@ mod tests {
         let conn = pool.get().unwrap();
         conn.execute_batch(
             r#"
-            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
             CREATE TABLE projects (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
@@ -81,7 +84,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_api_key_index_creates_key_if_missing() {
+    async fn test_api_key_index_creates_default_project() {
         let pool = create_test_pool();
         let app = create_app(pool.clone());
 
@@ -93,16 +96,16 @@ mod tests {
         let response = app.oneshot(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        // Verify key was created
-        let key = settings::get_api_key(&pool).unwrap();
-        assert!(key.is_some());
-        assert!(key.unwrap().starts_with("mapm_"));
+        // Verify default project was created
+        let project = project::ensure_default_project(&pool).unwrap();
+        assert!(project.api_key.starts_with("proj_"));
     }
 
     #[tokio::test]
     async fn test_api_key_regenerate() {
         let pool = create_test_pool();
-        let original_key = settings::get_or_create_api_key(&pool).unwrap();
+        let original_project = project::ensure_default_project(&pool).unwrap();
+        let original_key = original_project.api_key;
 
         let app = create_app(pool.clone());
 
@@ -116,8 +119,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
 
         // Verify key was regenerated
-        let new_key = settings::get_api_key(&pool).unwrap().unwrap();
-        assert_ne!(original_key, new_key);
-        assert!(new_key.starts_with("mapm_"));
+        let new_project = project::ensure_default_project(&pool).unwrap();
+        assert_ne!(original_key, new_project.api_key);
+        assert!(new_project.api_key.starts_with("proj_"));
     }
 }

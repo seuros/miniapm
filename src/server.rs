@@ -20,9 +20,13 @@ pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> 
     // Initialize start time for uptime tracking
     api::health::init_start_time();
 
-    // Initialize default admin user if user accounts are enabled
-    if config.enable_user_accounts {
-        models::user::ensure_default_admin(&pool)?;
+    // Always ensure default project and admin exist
+    // When features are disabled, we just skip the UI/auth, not the data
+    let default_project = models::project::ensure_default_project(&pool)?;
+    models::user::ensure_default_admin(&pool)?;
+
+    if !config.enable_projects {
+        tracing::info!("Single-project mode - API key: {}", default_project.api_key);
     }
 
     // Start background jobs

@@ -69,24 +69,8 @@ pub async fn create(
         return Redirect::to("/projects");
     }
 
-    match project::create(&pool, form.name.trim()) {
-        Ok(result) => {
-            let total_migrated = result.migrated_requests + result.migrated_errors + result.migrated_spans;
-            if total_migrated > 0 {
-                let msg = format!(
-                    "Project '{}' created. Migrated existing data: {} requests, {} errors, {} spans.",
-                    result.project.name,
-                    result.migrated_requests,
-                    result.migrated_errors,
-                    result.migrated_spans
-                );
-                Redirect::to(&format!("/projects?message={}", urlencoding::encode(&msg)))
-            } else {
-                Redirect::to("/projects")
-            }
-        }
-        Err(_) => Redirect::to("/projects"),
-    }
+    let _ = project::create(&pool, form.name.trim());
+    Redirect::to("/projects")
 }
 
 #[derive(Deserialize)]

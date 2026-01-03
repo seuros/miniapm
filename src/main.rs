@@ -41,6 +41,8 @@ enum Commands {
     },
     /// Start the MCP server (stdio)
     Mcp,
+    /// Print MCP configuration for Claude Desktop
+    McpConfig,
 }
 
 #[tokio::main]
@@ -107,6 +109,21 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Mcp) => {
             let pool = db::init(&config)?;
             miniapm::mcp::run(pool).await?;
+        }
+        Some(Commands::McpConfig) => {
+            let exe_path = std::env::current_exe()?;
+            let config_json = serde_json::json!({
+                "mcpServers": {
+                    "miniapm": {
+                        "command": exe_path.to_string_lossy(),
+                        "args": ["mcp"],
+                        "env": {
+                            "SQLITE_PATH": config.sqlite_path
+                        }
+                    }
+                }
+            });
+            println!("{}", serde_json::to_string_pretty(&config_json)?);
         }
         None => {
             // Default to server

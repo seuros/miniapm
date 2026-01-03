@@ -4,7 +4,6 @@ pub mod error;
 pub mod project;
 pub mod request;
 pub mod rollup;
-pub mod settings;
 pub mod span;
 pub mod user;
 

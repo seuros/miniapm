@@ -5,7 +5,6 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use std::env;
 
 use crate::DbPool;
 
@@ -31,49 +30,17 @@ pub async fn auth_middleware(
         _ => return Err(StatusCode::UNAUTHORIZED),
     };
 
-    // Check if projects are enabled
-    let projects_enabled = env::var("ENABLE_PROJECTS")
-        .map(|v| v == "1" || v.to_lowercase() == "true")
-        .unwrap_or(false);
-
-    if projects_enabled {
-        // Try to find project by API key
-        match crate::models::project::find_by_api_key(&pool, api_key) {
-            Ok(Some(project)) => {
-                request
-                    .extensions_mut()
-                    .insert(ProjectContext { project_id: Some(project.id) });
-                return Ok(next.run(request).await);
-            }
-            Ok(None) => {
-                // No matching project - return unauthorized
-                return Err(StatusCode::UNAUTHORIZED);
-            }
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    // Always authenticate against project API keys
+    // A default project is always created on startup
+    match crate::models::project::find_by_api_key(&pool, api_key) {
+        Ok(Some(project)) => {
+            request
+                .extensions_mut()
+                .insert(ProjectContext { project_id: Some(project.id) });
+            Ok(next.run(request).await)
         }
-    } else {
-        // Single API key mode - verify against settings
-        match crate::models::settings::verify_api_key(&pool, api_key) {
-            Ok(true) => {
-                request
-                    .extensions_mut()
-                    .insert(ProjectContext { project_id: None });
-                return Ok(next.run(request).await);
-            }
-            Ok(false) => {
-                // Also check against env var for backward compatibility
-                if let Ok(env_key) = env::var("MINI_APM_API_KEY") {
-                    if api_key == env_key {
-                        request
-                            .extensions_mut()
-                            .insert(ProjectContext { project_id: None });
-                        return Ok(next.run(request).await);
-                    }
-                }
-                return Err(StatusCode::UNAUTHORIZED);
-            }
-            Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-        }
+        Ok(None) => Err(StatusCode::UNAUTHORIZED),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
 }
 
@@ -98,7 +65,6 @@ mod tests {
         let conn = pool.get().unwrap();
         conn.execute_batch(
             r#"
-            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
             CREATE TABLE projects (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
@@ -156,8 +122,8 @@ mod tests {
     #[tokio::test]
     async fn test_auth_rejects_invalid_key() {
         let pool = create_test_pool();
-        // Create a valid API key first
-        crate::models::settings::get_or_create_api_key(&pool).unwrap();
+        // Create a valid project API key first
+        crate::models::project::ensure_default_project(&pool).unwrap();
 
         let app = create_app(pool);
 
@@ -172,15 +138,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_auth_accepts_valid_settings_key() {
+    async fn test_auth_accepts_valid_project_key() {
         let pool = create_test_pool();
-        let api_key = crate::models::settings::get_or_create_api_key(&pool).unwrap();
+        let project = crate::models::project::ensure_default_project(&pool).unwrap();
 
         let app = create_app(pool);
 
         let req = Request::builder()
             .uri("/test")
-            .header("Authorization", format!("Bearer {}", api_key))
+            .header("Authorization", format!("Bearer {}", project.api_key))
             .body(Body::empty())
             .unwrap();
 
