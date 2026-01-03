@@ -124,9 +124,12 @@ fn handle_list_tools() -> Result<serde_json::Value, String> {
     }))
 }
 
-fn handle_tool_call(pool: &DbPool, params: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
-    use chrono::{Duration, Utc};
+fn handle_tool_call(
+    pool: &DbPool,
+    params: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
     use crate::models;
+    use chrono::{Duration, Utc};
 
     let params = params.ok_or("Missing params")?;
     let tool_name = params["name"].as_str().ok_or("Missing tool name")?;
@@ -136,8 +139,8 @@ fn handle_tool_call(pool: &DbPool, params: Option<serde_json::Value>) -> Result<
         "list_errors" => {
             let status = args["status"].as_str();
             let limit = args["limit"].as_i64().unwrap_or(10);
-            let errors = models::error::list(pool, None, status, limit)
-                .map_err(|e| e.to_string())?;
+            let errors =
+                models::error::list(pool, None, status, limit).map_err(|e| e.to_string())?;
             serde_json::to_value(errors).map_err(|e| e.to_string())?
         }
         "error_details" => {
@@ -167,12 +170,12 @@ fn handle_tool_call(pool: &DbPool, params: Option<serde_json::Value>) -> Result<
         }
         "system_status" => {
             let since_24h = (Utc::now() - Duration::hours(24)).to_rfc3339();
-            let requests_24h = models::request::count_since(pool, None, &since_24h)
-                .map_err(|e| e.to_string())?;
-            let errors_24h = models::error::count_since(pool, None, &since_24h)
-                .map_err(|e| e.to_string())?;
-            let avg_ms = models::request::avg_ms_since(pool, None, &since_24h)
-                .map_err(|e| e.to_string())?;
+            let requests_24h =
+                models::request::count_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
+            let errors_24h =
+                models::error::count_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
+            let avg_ms =
+                models::request::avg_ms_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
             let db_size = crate::db::get_db_size(pool).map_err(|e| e.to_string())?;
 
             serde_json::json!({

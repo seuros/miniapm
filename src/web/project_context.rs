@@ -44,9 +44,7 @@ pub fn get_project_context(pool: &DbPool, cookies: &Cookies) -> WebProjectContex
     let projects = crate::models::project::list_all(pool).unwrap_or_default();
 
     // Get project slug from cookie
-    let project_slug = cookies
-        .get(PROJECT_COOKIE)
-        .map(|c| c.value().to_string());
+    let project_slug = cookies.get(PROJECT_COOKIE).map(|c| c.value().to_string());
 
     let current_project = match project_slug {
         Some(slug) => projects.iter().find(|p| p.slug == slug).cloned(),

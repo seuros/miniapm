@@ -2,7 +2,10 @@ use askama::Template;
 use axum::extract::State;
 use tower_cookies::Cookies;
 
-use crate::{models::deploy::{self, Deploy}, DbPool};
+use crate::{
+    models::deploy::{self, Deploy},
+    DbPool,
+};
 
 use super::project_context::{get_project_context, WebProjectContext};
 

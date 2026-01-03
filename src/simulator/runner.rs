@@ -37,7 +37,11 @@ pub async fn run(
         let total_ms = patterns::simulate_latency(route.base_ms);
         let db_ms = patterns::simulate_db_time(total_ms);
         let view_ms = patterns::simulate_view_time(total_ms, db_ms);
-        let status = if rng.gen::<f64>() < error_rate { 500 } else { 200 };
+        let status = if rng.gen::<f64>() < error_rate {
+            500
+        } else {
+            200
+        };
 
         let request_id = format!("{:032x}", rng.gen::<u128>());
         let timestamp = Utc::now().to_rfc3339();
@@ -133,7 +137,10 @@ pub async fn run(
             let fingerprint = hex::encode(&hasher.finalize()[..8]);
 
             // Generate realistic source context
-            let controller_file = format!("app/controllers/{}.rb", route.controller.to_lowercase().replace("::", "/"));
+            let controller_file = format!(
+                "app/controllers/{}.rb",
+                route.controller.to_lowercase().replace("::", "/")
+            );
             let error_line = 42;
 
             let error_payload = serde_json::json!({
@@ -189,7 +196,11 @@ pub async fn backfill(config: &Config, days: u32, requests_per_day: u32) -> anyh
     let url = format!("{}/ingest", config.mini_apm_url);
     let api_key = config.api_key.as_deref().unwrap_or("");
 
-    tracing::info!("Backfilling {} days with ~{} requests/day", days, requests_per_day);
+    tracing::info!(
+        "Backfilling {} days with ~{} requests/day",
+        days,
+        requests_per_day
+    );
 
     let mut rng = rand::thread_rng();
 
@@ -199,7 +210,8 @@ pub async fn backfill(config: &Config, days: u32, requests_per_day: u32) -> anyh
 
         // Distribute requests across hours
         for hour in 0..24 {
-            let multiplier = patterns::traffic_multiplier_for(hour, base_date.weekday().num_days_from_monday());
+            let multiplier =
+                patterns::traffic_multiplier_for(hour, base_date.weekday().num_days_from_monday());
             let requests_this_hour = ((requests_per_day as f64 / 24.0) * multiplier) as u32;
 
             let mut batch = Vec::new();

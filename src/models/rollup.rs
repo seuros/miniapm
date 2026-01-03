@@ -81,7 +81,12 @@ pub fn insert_daily(pool: &DbPool, rollup: &DailyRollup) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn daily_for_range(pool: &DbPool, start: &str, end: &str, limit: i64) -> anyhow::Result<Vec<DailyRollup>> {
+pub fn daily_for_range(
+    pool: &DbPool,
+    start: &str,
+    end: &str,
+    limit: i64,
+) -> anyhow::Result<Vec<DailyRollup>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         r#"

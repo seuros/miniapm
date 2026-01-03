@@ -2,23 +2,23 @@ use chrono::{Datelike, Timelike, Utc};
 
 // Hour-of-day multipliers (simulates business hours traffic)
 const HOURLY_PATTERN: [f64; 24] = [
-    0.2, 0.1, 0.1, 0.1,  // 0-3
-    0.1, 0.2, 0.4, 0.6,  // 4-7
-    0.8, 1.0, 1.2, 1.3,  // 8-11
-    1.1, 1.2, 1.3, 1.2,  // 12-15
-    1.1, 1.0, 0.9, 0.8,  // 16-19
-    0.7, 0.6, 0.4, 0.3,  // 20-23
+    0.2, 0.1, 0.1, 0.1, // 0-3
+    0.1, 0.2, 0.4, 0.6, // 4-7
+    0.8, 1.0, 1.2, 1.3, // 8-11
+    1.1, 1.2, 1.3, 1.2, // 12-15
+    1.1, 1.0, 0.9, 0.8, // 16-19
+    0.7, 0.6, 0.4, 0.3, // 20-23
 ];
 
 // Day-of-week multipliers (1=Monday, 7=Sunday)
 const DAILY_PATTERN: [f64; 7] = [
-    1.0,  // Monday
-    1.1,  // Tuesday
-    1.1,  // Wednesday
-    1.0,  // Thursday
-    0.9,  // Friday
-    0.7,  // Saturday
-    0.6,  // Sunday
+    1.0, // Monday
+    1.1, // Tuesday
+    1.1, // Wednesday
+    1.0, // Thursday
+    0.9, // Friday
+    0.7, // Saturday
+    0.6, // Sunday
 ];
 
 pub fn traffic_multiplier() -> f64 {

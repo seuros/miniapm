@@ -148,7 +148,10 @@ async fn main() -> anyhow::Result<()> {
             println!("Example request:");
             println!("```bash");
             println!("curl -X POST {}/mcp \\", config.mini_apm_url);
-            println!("  -H 'Authorization: Bearer {}' \\", default_project.api_key);
+            println!(
+                "  -H 'Authorization: Bearer {}' \\",
+                default_project.api_key
+            );
             println!("  -H 'Content-Type: application/json' \\");
             println!("  -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}}'");
             println!("```");

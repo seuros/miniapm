@@ -108,9 +108,19 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
         let view_start = end_ns - (view_ms * 1_000_000.0) as i64;
 
         let template = match route.action {
-            "index" => format!("{}/index.html.erb", route.controller.to_lowercase().replace("::", "/")),
-            "show" => format!("{}/show.html.erb", route.controller.to_lowercase().replace("::", "/")),
-            _ => format!("{}/{}.html.erb", route.controller.to_lowercase().replace("::", "/"), route.action),
+            "index" => format!(
+                "{}/index.html.erb",
+                route.controller.to_lowercase().replace("::", "/")
+            ),
+            "show" => format!(
+                "{}/show.html.erb",
+                route.controller.to_lowercase().replace("::", "/")
+            ),
+            _ => format!(
+                "{}/{}.html.erb",
+                route.controller.to_lowercase().replace("::", "/"),
+                route.action
+            ),
         };
 
         spans.push(json!({
@@ -416,7 +426,9 @@ pub fn generate_rake_trace() -> Value {
 
 fn pick_query_type<R: Rng>(rng: &mut R, route: &Route) -> (&'static str, &'static str) {
     let tables = match route.controller {
-        "ProductsController" | "Api::V1::ProductsController" => &["products", "categories", "product_images"][..],
+        "ProductsController" | "Api::V1::ProductsController" => {
+            &["products", "categories", "product_images"][..]
+        }
         "CartController" | "CartItemsController" => &["carts", "cart_items", "products"][..],
         "CheckoutController" => &["orders", "order_items", "payments", "addresses"][..],
         "OrdersController" => &["orders", "order_items", "users"][..],
@@ -433,7 +445,10 @@ fn pick_query_type<R: Rng>(rng: &mut R, route: &Route) -> (&'static str, &'stati
 
 fn generate_sql_query(operation: &str, table: &str) -> String {
     match operation {
-        "SELECT" => format!("SELECT \"{}\".*  FROM \"{}\" WHERE \"{}\"...", table, table, table),
+        "SELECT" => format!(
+            "SELECT \"{}\".*  FROM \"{}\" WHERE \"{}\"...",
+            table, table, table
+        ),
         "INSERT" => format!("INSERT INTO \"{}\" (...) VALUES (...)", table),
         "UPDATE" => format!("UPDATE \"{}\" SET ... WHERE ...", table),
         _ => format!("{} on {}", operation, table),
@@ -468,7 +483,10 @@ fn pick_external_service<R: Rng>(rng: &mut R) -> (&'static str, &'static str) {
         ("https://api.stripe.com/v1/charges", "stripe"),
         ("https://api.sendgrid.com/v3/mail/send", "sendgrid"),
         ("https://api.twilio.com/2010-04-01/Messages", "twilio"),
-        ("https://maps.googleapis.com/maps/api/geocode/json", "google-maps"),
+        (
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            "google-maps",
+        ),
     ];
     services[rng.gen_range(0..services.len())]
 }

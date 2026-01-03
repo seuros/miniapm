@@ -58,7 +58,8 @@ pub fn verify(pool: &DbPool, raw_key: &str) -> anyhow::Result<bool> {
 
 pub fn list(pool: &DbPool) -> anyhow::Result<Vec<ApiKey>> {
     let conn = pool.get()?;
-    let mut stmt = conn.prepare("SELECT id, name, created_at, last_used_at FROM api_keys ORDER BY created_at")?;
+    let mut stmt = conn
+        .prepare("SELECT id, name, created_at, last_used_at FROM api_keys ORDER BY created_at")?;
 
     let keys = stmt
         .query_map([], |row| {

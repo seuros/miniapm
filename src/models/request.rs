@@ -132,7 +132,12 @@ pub fn recent(pool: &DbPool, project_id: Option<i64>, limit: i64) -> anyhow::Res
     Ok(requests)
 }
 
-pub fn slow(pool: &DbPool, project_id: Option<i64>, threshold_ms: f64, limit: i64) -> anyhow::Result<Vec<Request>> {
+pub fn slow(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    threshold_ms: f64,
+    limit: i64,
+) -> anyhow::Result<Vec<Request>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         r#"
@@ -193,7 +198,12 @@ pub fn avg_ms_since(pool: &DbPool, project_id: Option<i64>, since: &str) -> anyh
 }
 
 /// Calculate percentile latency (p50, p95, p99) since a given time
-pub fn percentile_ms_since(pool: &DbPool, project_id: Option<i64>, since: &str, percentile: f64) -> anyhow::Result<i64> {
+pub fn percentile_ms_since(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+    percentile: f64,
+) -> anyhow::Result<i64> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         "SELECT total_ms FROM requests WHERE happened_at >= ?1 AND (?2 IS NULL OR project_id = ?2) ORDER BY total_ms ASC",
@@ -219,7 +229,11 @@ pub struct LatencyStats {
     pub p99_ms: i64,
 }
 
-pub fn latency_stats_since(pool: &DbPool, project_id: Option<i64>, since: &str) -> anyhow::Result<LatencyStats> {
+pub fn latency_stats_since(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+) -> anyhow::Result<LatencyStats> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         "SELECT total_ms FROM requests WHERE happened_at >= ?1 AND (?2 IS NULL OR project_id = ?2) ORDER BY total_ms ASC",
@@ -230,7 +244,11 @@ pub fn latency_stats_since(pool: &DbPool, project_id: Option<i64>, since: &str) 
         .collect::<Result<Vec<_>, _>>()?;
 
     if values.is_empty() {
-        return Ok(LatencyStats { avg_ms: 0, p95_ms: 0, p99_ms: 0 });
+        return Ok(LatencyStats {
+            avg_ms: 0,
+            p95_ms: 0,
+            p99_ms: 0,
+        });
     }
 
     let avg = values.iter().sum::<f64>() / values.len() as f64;
@@ -253,7 +271,11 @@ pub struct TimeSeriesPoint {
 }
 
 /// Get hourly time series data for the last 24 hours
-pub fn hourly_stats(pool: &DbPool, project_id: Option<i64>, hours: i64) -> anyhow::Result<Vec<TimeSeriesPoint>> {
+pub fn hourly_stats(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    hours: i64,
+) -> anyhow::Result<Vec<TimeSeriesPoint>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         r#"
@@ -299,7 +321,12 @@ pub struct RouteSummary {
     pub error_rate: f64,
 }
 
-pub fn routes_summary(pool: &DbPool, project_id: Option<i64>, since: &str, limit: i64) -> anyhow::Result<Vec<RouteSummary>> {
+pub fn routes_summary(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+    limit: i64,
+) -> anyhow::Result<Vec<RouteSummary>> {
     routes_summary_filtered(pool, project_id, since, None, None, "requests", limit)
 }
 
@@ -323,7 +350,7 @@ pub fn routes_summary_filtered(
         "errors" => "error_count DESC",
         "db" => "avg_db_ms DESC",
         "p95" | "p99" => "request_count DESC", // Fetch by request count, sort later in Rust
-        _ => "request_count DESC", // default: requests
+        _ => "request_count DESC",             // default: requests
     };
 
     // First, get the basic stats
@@ -352,24 +379,38 @@ pub fn routes_summary_filtered(
     let mut stmt = conn.prepare(&sql)?;
 
     let routes: Vec<(String, String, i64, i64, i64, i64, i64, i64, i64)> = stmt
-        .query_map(rusqlite::params![since, project_id, method_filter, search, limit], |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get::<_, f64>(3)? as i64,
-                row.get::<_, f64>(4)? as i64,
-                row.get::<_, f64>(5)? as i64,
-                row.get::<_, f64>(6)? as i64,
-                row.get::<_, f64>(7)? as i64,
-                row.get(8)?,
-            ))
-        })?
+        .query_map(
+            rusqlite::params![since, project_id, method_filter, search, limit],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get::<_, f64>(3)? as i64,
+                    row.get::<_, f64>(4)? as i64,
+                    row.get::<_, f64>(5)? as i64,
+                    row.get::<_, f64>(6)? as i64,
+                    row.get::<_, f64>(7)? as i64,
+                    row.get(8)?,
+                ))
+            },
+        )?
         .collect::<Result<Vec<_>, _>>()?;
 
     // Now calculate percentiles for each route
     let mut result = Vec::with_capacity(routes.len());
-    for (path, method, request_count, avg_ms, max_ms, min_ms, avg_db_ms, avg_db_count, error_count) in routes {
+    for (
+        path,
+        method,
+        request_count,
+        avg_ms,
+        max_ms,
+        min_ms,
+        avg_db_ms,
+        avg_db_count,
+        error_count,
+    ) in routes
+    {
         let (p95_ms, p99_ms) = compute_route_percentiles(&conn, &path, &method, since, project_id)?;
 
         let error_rate = if request_count > 0 {
@@ -422,7 +463,9 @@ fn compute_route_percentiles(
     )?;
 
     let values: Vec<f64> = stmt
-        .query_map(rusqlite::params![path, method, since, project_id], |row| row.get(0))?
+        .query_map(rusqlite::params![path, method, since, project_id], |row| {
+            row.get(0)
+        })?
         .collect::<Result<Vec<_>, _>>()?;
 
     if values.is_empty() {
@@ -432,7 +475,10 @@ fn compute_route_percentiles(
     let p95_idx = ((0.95 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
     let p99_idx = ((0.99 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
 
-    Ok((values[p95_idx].round() as i64, values[p99_idx].round() as i64))
+    Ok((
+        values[p95_idx].round() as i64,
+        values[p99_idx].round() as i64,
+    ))
 }
 
 pub fn routes_count(
@@ -460,7 +506,11 @@ pub fn routes_count(
     Ok(count)
 }
 
-pub fn delete_before(pool: &DbPool, project_id: Option<i64>, before: &str) -> anyhow::Result<usize> {
+pub fn delete_before(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    before: &str,
+) -> anyhow::Result<usize> {
     let conn = pool.get()?;
     let deleted = conn.execute(
         "DELETE FROM requests WHERE happened_at < ?1 AND (?2 IS NULL OR project_id = ?2)",
@@ -481,7 +531,12 @@ pub struct RequestDisplay {
     pub happened_at: String,
 }
 
-pub fn slow_display(pool: &DbPool, project_id: Option<i64>, threshold_ms: f64, limit: i64) -> anyhow::Result<Vec<RequestDisplay>> {
+pub fn slow_display(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    threshold_ms: f64,
+    limit: i64,
+) -> anyhow::Result<Vec<RequestDisplay>> {
     slow_display_filtered(pool, project_id, threshold_ms, None, "total", limit)
 }
 
@@ -493,7 +548,16 @@ pub fn slow_display_filtered(
     sort_by: &str,
     limit: i64,
 ) -> anyhow::Result<Vec<RequestDisplay>> {
-    slow_display_paginated(pool, project_id, threshold_ms, since, None, sort_by, limit, 0)
+    slow_display_paginated(
+        pool,
+        project_id,
+        threshold_ms,
+        since,
+        None,
+        sort_by,
+        limit,
+        0,
+    )
 }
 
 pub fn slow_display_paginated(
@@ -535,17 +599,20 @@ pub fn slow_display_paginated(
 
     let mut stmt = conn.prepare(&sql)?;
     let requests = stmt
-        .query_map(rusqlite::params![threshold_ms, project_id, since, route_filter, limit, offset], |row| {
-            Ok(RequestDisplay {
-                method: row.get(0)?,
-                path: row.get(1)?,
-                status: row.get(2)?,
-                total_ms: row.get::<_, f64>(3)? as i64,
-                db_ms: row.get::<_, f64>(4)? as i64,
-                view_ms: row.get::<_, f64>(5)? as i64,
-                happened_at: row.get(6)?,
-            })
-        })?
+        .query_map(
+            rusqlite::params![threshold_ms, project_id, since, route_filter, limit, offset],
+            |row| {
+                Ok(RequestDisplay {
+                    method: row.get(0)?,
+                    path: row.get(1)?,
+                    status: row.get(2)?,
+                    total_ms: row.get::<_, f64>(3)? as i64,
+                    db_ms: row.get::<_, f64>(4)? as i64,
+                    view_ms: row.get::<_, f64>(5)? as i64,
+                    happened_at: row.get(6)?,
+                })
+            },
+        )?
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(requests)

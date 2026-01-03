@@ -44,10 +44,7 @@ pub struct SwitchForm {
     pub slug: String,
 }
 
-pub async fn switch_project(
-    cookies: Cookies,
-    Form(form): Form<SwitchForm>,
-) -> impl IntoResponse {
+pub async fn switch_project(cookies: Cookies, Form(form): Form<SwitchForm>) -> impl IntoResponse {
     let cookie = Cookie::build((PROJECT_COOKIE, form.slug))
         .path("/")
         .http_only(true)
@@ -61,10 +58,7 @@ pub struct CreateForm {
     pub name: String,
 }
 
-pub async fn create(
-    State(pool): State<DbPool>,
-    Form(form): Form<CreateForm>,
-) -> impl IntoResponse {
+pub async fn create(State(pool): State<DbPool>, Form(form): Form<CreateForm>) -> impl IntoResponse {
     if form.name.trim().is_empty() {
         return Redirect::to("/projects");
     }
@@ -78,10 +72,7 @@ pub struct DeleteForm {
     pub id: i64,
 }
 
-pub async fn delete(
-    State(pool): State<DbPool>,
-    Form(form): Form<DeleteForm>,
-) -> impl IntoResponse {
+pub async fn delete(State(pool): State<DbPool>, Form(form): Form<DeleteForm>) -> impl IntoResponse {
     let _ = project::delete(&pool, form.id);
     Redirect::to("/projects")
 }

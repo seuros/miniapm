@@ -71,15 +71,14 @@ pub struct CreateUserForm {
 // Helper to get current user from cookies
 pub fn get_current_user(pool: &DbPool, jar: &CookieJar) -> Option<models::User> {
     let token = jar.get(SESSION_COOKIE)?.value();
-    models::user::get_user_from_session(pool, token).ok().flatten()
+    models::user::get_user_from_session(pool, token)
+        .ok()
+        .flatten()
 }
 
 // Handlers
 
-pub async fn login_page(
-    State(pool): State<DbPool>,
-    jar: CookieJar,
-) -> Response {
+pub async fn login_page(State(pool): State<DbPool>, jar: CookieJar) -> Response {
     // If already logged in, redirect to home
     if get_current_user(&pool, &jar).is_some() {
         return Redirect::to("/").into_response();
@@ -144,10 +143,7 @@ pub async fn login_submit(
     }
 }
 
-pub async fn logout(
-    State(pool): State<DbPool>,
-    jar: CookieJar,
-) -> Response {
+pub async fn logout(State(pool): State<DbPool>, jar: CookieJar) -> Response {
     if let Some(cookie) = jar.get(SESSION_COOKIE) {
         let _ = models::user::delete_session(&pool, cookie.value());
     }
@@ -156,10 +152,7 @@ pub async fn logout(
     (jar, Redirect::to("/auth/login")).into_response()
 }
 
-pub async fn change_password_page(
-    State(pool): State<DbPool>,
-    jar: CookieJar,
-) -> Response {
+pub async fn change_password_page(State(pool): State<DbPool>, jar: CookieJar) -> Response {
     let Some(user) = get_current_user(&pool, &jar) else {
         return Redirect::to("/auth/login").into_response();
     };
@@ -210,8 +203,9 @@ pub async fn change_password_submit(
     }
 
     // Verify current password
-    let password_valid = user.password_hash.as_ref()
-        .map_or(false, |h| models::user::verify_password(&form.current_password, h));
+    let password_valid = user.password_hash.as_ref().map_or(false, |h| {
+        models::user::verify_password(&form.current_password, h)
+    });
     if !password_valid {
         return Html(
             ChangePasswordTemplate {
@@ -312,7 +306,11 @@ pub async fn create_user(
             let users = models::user::list_all(&pool).unwrap_or_default();
             let base_url = std::env::var("MINI_APM_URL")
                 .unwrap_or_else(|_| "http://localhost:3000".to_string());
-            let invite_url = format!("{}/auth/invite/{}", base_url.trim_end_matches('/'), invite_token);
+            let invite_url = format!(
+                "{}/auth/invite/{}",
+                base_url.trim_end_matches('/'),
+                invite_token
+            );
             Html(
                 UsersTemplate {
                     users,
@@ -442,7 +440,10 @@ pub async fn invite_page(
             .unwrap_or_default(),
         )
         .into_response(),
-        _ => Html("<h1>Invalid or expired invite link</h1><p><a href=\"/auth/login\">Go to login</a></p>").into_response(),
+        _ => Html(
+            "<h1>Invalid or expired invite link</h1><p><a href=\"/auth/login\">Go to login</a></p>",
+        )
+        .into_response(),
     }
 }
 
@@ -454,7 +455,10 @@ pub async fn invite_submit(
 ) -> Response {
     let user = match models::user::find_by_invite_token(&pool, &token) {
         Ok(Some(u)) => u,
-        _ => return Html("<h1>Invalid or expired invite link</h1><p><a href=\"/auth/login\">Go to login</a></p>").into_response(),
+        _ => return Html(
+            "<h1>Invalid or expired invite link</h1><p><a href=\"/auth/login\">Go to login</a></p>",
+        )
+        .into_response(),
     };
 
     if form.password != form.confirm_password {

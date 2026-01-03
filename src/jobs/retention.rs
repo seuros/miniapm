@@ -1,28 +1,30 @@
-use crate::{config::Config, models::{self, deploy}, DbPool};
+use crate::{
+    config::Config,
+    models::{self, deploy},
+    DbPool,
+};
 use chrono::{Duration, Utc};
 
 pub fn cleanup(pool: &DbPool, config: &Config) -> anyhow::Result<()> {
     // Delete old requests (across all projects)
-    let requests_cutoff = (Utc::now() - Duration::days(config.retention_days_requests))
-        .to_rfc3339();
+    let requests_cutoff =
+        (Utc::now() - Duration::days(config.retention_days_requests)).to_rfc3339();
     let deleted_requests = models::request::delete_before(pool, None, &requests_cutoff)?;
     tracing::info!("Deleted {} old requests", deleted_requests);
 
     // Delete old error occurrences
-    let errors_cutoff = (Utc::now() - Duration::days(config.retention_days_errors))
-        .to_rfc3339();
+    let errors_cutoff = (Utc::now() - Duration::days(config.retention_days_errors)).to_rfc3339();
     let deleted_occurrences = models::error::delete_occurrences_before(pool, &errors_cutoff)?;
     tracing::info!("Deleted {} old error occurrences", deleted_occurrences);
 
     // Delete old hourly rollups
-    let hourly_cutoff = (Utc::now() - Duration::days(config.retention_days_hourly_rollups))
-        .to_rfc3339();
+    let hourly_cutoff =
+        (Utc::now() - Duration::days(config.retention_days_hourly_rollups)).to_rfc3339();
     let deleted_hourly = models::rollup::delete_hourly_before(pool, &hourly_cutoff)?;
     tracing::info!("Deleted {} old hourly rollups", deleted_hourly);
 
     // Delete old spans
-    let spans_cutoff = (Utc::now() - Duration::days(config.retention_days_spans))
-        .to_rfc3339();
+    let spans_cutoff = (Utc::now() - Duration::days(config.retention_days_spans)).to_rfc3339();
     let deleted_spans = models::span::delete_before(pool, &spans_cutoff)?;
     tracing::info!("Deleted {} old spans", deleted_spans);
 

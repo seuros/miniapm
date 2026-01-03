@@ -50,13 +50,18 @@ pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> 
                 .route("/errors/batch", post(api::ingest_errors_batch))
                 .route("/deploys", post(api::ingest_deploys))
                 .route("/v1/traces", post(api::ingest_spans))
-                .layer(middleware::from_fn_with_state(pool.clone(), api::auth_middleware)),
+                .layer(middleware::from_fn_with_state(
+                    pool.clone(),
+                    api::auth_middleware,
+                )),
         )
         // MCP API (with API key auth)
         .route(
             "/mcp",
-            post(api::mcp_handler)
-                .layer(middleware::from_fn_with_state(pool.clone(), api::auth_middleware)),
+            post(api::mcp_handler).layer(middleware::from_fn_with_state(
+                pool.clone(),
+                api::auth_middleware,
+            )),
         )
         // Auth routes (always available)
         .merge(web::auth_routes())

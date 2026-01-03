@@ -110,7 +110,10 @@ impl SpanCategory {
     pub fn from_attributes(name: &str, kind: i32, attributes: &HashMap<String, String>) -> Self {
         // Check for database spans first
         if attributes.contains_key("db.system") || attributes.contains_key("db.statement") {
-            let db_system = attributes.get("db.system").map(|s| s.as_str()).unwrap_or("");
+            let db_system = attributes
+                .get("db.system")
+                .map(|s| s.as_str())
+                .unwrap_or("");
             if db_system == "elasticsearch" || db_system == "opensearch" {
                 return SpanCategory::Search;
             }
@@ -267,7 +270,9 @@ impl TraceSummary {
         // For web requests, show "METHOD /path"
         if let Some(ref method) = self.http_method {
             // Extract just the path from the URL if present
-            let path = self.http_url.as_ref()
+            let path = self
+                .http_url
+                .as_ref()
                 .and_then(|url| {
                     // Parse URL to get just the path
                     if let Some(pos) = url.find("://") {
@@ -401,8 +406,12 @@ pub fn insert_otlp_batch(
     let mut count = 0;
 
     for resource_span in &request.resource_spans {
-        let resource_attrs =
-            parse_attributes(&resource_span.resource.as_ref().and_then(|r| r.attributes.clone()));
+        let resource_attrs = parse_attributes(
+            &resource_span
+                .resource
+                .as_ref()
+                .and_then(|r| r.attributes.clone()),
+        );
         let service_name = resource_attrs.get("service.name").cloned();
         let resource_json = serde_json::to_string(&resource_attrs)?;
 
@@ -445,11 +454,7 @@ pub fn insert_otlp_batch(
                     .format("%Y-%m-%dT%H:%M:%S%.3fZ")
                     .to_string();
 
-                let status_code = otlp_span
-                    .status
-                    .as_ref()
-                    .and_then(|s| s.code)
-                    .unwrap_or(0);
+                let status_code = otlp_span.status.as_ref().and_then(|s| s.code).unwrap_or(0);
                 let status_message = otlp_span.status.as_ref().and_then(|s| s.message.clone());
 
                 // Extract denormalized fields
@@ -544,7 +549,16 @@ pub fn list_traces(
     root_type_filter: Option<RootSpanType>,
     limit: i64,
 ) -> anyhow::Result<Vec<TraceSummary>> {
-    list_traces_filtered(pool, project_id, root_type_filter, None, None, None, "recent", limit)
+    list_traces_filtered(
+        pool,
+        project_id,
+        root_type_filter,
+        None,
+        None,
+        None,
+        "recent",
+        limit,
+    )
 }
 
 pub fn list_traces_filtered(
@@ -557,7 +571,17 @@ pub fn list_traces_filtered(
     sort_by: &str,
     limit: i64,
 ) -> anyhow::Result<Vec<TraceSummary>> {
-    list_traces_paginated(pool, project_id, root_type_filter, since, search, min_duration_ms, sort_by, limit, 0)
+    list_traces_paginated(
+        pool,
+        project_id,
+        root_type_filter,
+        since,
+        search,
+        min_duration_ms,
+        sort_by,
+        limit,
+        0,
+    )
 }
 
 pub fn list_traces_paginated(
@@ -610,7 +634,15 @@ pub fn list_traces_paginated(
     let mut stmt = conn.prepare(&sql)?;
     let traces = stmt
         .query_map(
-            rusqlite::params![project_id, root_type_str, since, search, min_duration_ms, limit, offset],
+            rusqlite::params![
+                project_id,
+                root_type_str,
+                since,
+                search,
+                min_duration_ms,
+                limit,
+                offset
+            ],
             |row| {
                 Ok(TraceSummary {
                     trace_id: row.get(0)?,
@@ -837,9 +869,19 @@ fn normalize_sql(sql: &str) -> String {
         } else if c == '\'' || c == '"' {
             in_string = true;
             string_char = c;
-        } else if c.is_ascii_digit() && (result.ends_with(' ') || result.ends_with('=') || result.ends_with('(') || result.ends_with(',') || result.is_empty()) {
+        } else if c.is_ascii_digit()
+            && (result.ends_with(' ')
+                || result.ends_with('=')
+                || result.ends_with('(')
+                || result.ends_with(',')
+                || result.is_empty())
+        {
             // Skip numbers that appear to be values
-            while chars.peek().map(|ch| ch.is_ascii_digit() || *ch == '.').unwrap_or(false) {
+            while chars
+                .peek()
+                .map(|ch| ch.is_ascii_digit() || *ch == '.')
+                .unwrap_or(false)
+            {
                 chars.next();
             }
             result.push('?');
@@ -868,7 +910,9 @@ pub fn detect_n_plus_1(spans: &[SpanDisplay]) -> Vec<NPlus1Issue> {
         if span.category == SpanCategory::Db {
             if let Some(ref statement) = span.db_statement {
                 let pattern = normalize_sql(statement);
-                let entry = pattern_counts.entry(pattern).or_insert((0, 0.0, Vec::new()));
+                let entry = pattern_counts
+                    .entry(pattern)
+                    .or_insert((0, 0.0, Vec::new()));
                 entry.0 += 1;
                 entry.1 += span.duration_ms;
                 entry.2.push(span.span_id.clone());
@@ -879,12 +923,14 @@ pub fn detect_n_plus_1(spans: &[SpanDisplay]) -> Vec<NPlus1Issue> {
     let mut issues: Vec<NPlus1Issue> = pattern_counts
         .into_iter()
         .filter(|(_, (count, _, _))| *count >= N_PLUS_1_THRESHOLD)
-        .map(|(pattern, (count, total_duration_ms, span_ids))| NPlus1Issue {
-            pattern,
-            count,
-            total_duration_ms,
-            span_ids,
-        })
+        .map(
+            |(pattern, (count, total_duration_ms, span_ids))| NPlus1Issue {
+                pattern,
+                count,
+                total_duration_ms,
+                span_ids,
+            },
+        )
         .collect();
 
     // Sort by count descending
@@ -936,13 +982,19 @@ mod tests {
     #[test]
     fn test_normalize_sql_mixed() {
         let sql = "SELECT * FROM orders WHERE user_id = 42 AND status = 'pending'";
-        assert_eq!(normalize_sql(sql), "SELECT * FROM orders WHERE user_id = ? AND status = ?");
+        assert_eq!(
+            normalize_sql(sql),
+            "SELECT * FROM orders WHERE user_id = ? AND status = ?"
+        );
     }
 
     #[test]
     fn test_normalize_sql_in_clause() {
         let sql = "SELECT * FROM users WHERE id IN (1, 2, 3)";
-        assert_eq!(normalize_sql(sql), "SELECT * FROM users WHERE id IN (?, ?, ?)");
+        assert_eq!(
+            normalize_sql(sql),
+            "SELECT * FROM users WHERE id IN (?, ?, ?)"
+        );
     }
 
     // SpanCategory tests
@@ -950,55 +1002,88 @@ mod tests {
     fn test_span_category_db() {
         let mut attrs = HashMap::new();
         attrs.insert("db.system".to_string(), "postgresql".to_string());
-        assert_eq!(SpanCategory::from_attributes("SELECT users", 0, &attrs), SpanCategory::Db);
+        assert_eq!(
+            SpanCategory::from_attributes("SELECT users", 0, &attrs),
+            SpanCategory::Db
+        );
     }
 
     #[test]
     fn test_span_category_elasticsearch() {
         let mut attrs = HashMap::new();
         attrs.insert("db.system".to_string(), "elasticsearch".to_string());
-        assert_eq!(SpanCategory::from_attributes("search", 0, &attrs), SpanCategory::Search);
+        assert_eq!(
+            SpanCategory::from_attributes("search", 0, &attrs),
+            SpanCategory::Search
+        );
     }
 
     #[test]
     fn test_span_category_http_server() {
         let mut attrs = HashMap::new();
         attrs.insert("http.method".to_string(), "GET".to_string());
-        assert_eq!(SpanCategory::from_attributes("GET /users", 2, &attrs), SpanCategory::HttpServer);
+        assert_eq!(
+            SpanCategory::from_attributes("GET /users", 2, &attrs),
+            SpanCategory::HttpServer
+        );
     }
 
     #[test]
     fn test_span_category_http_client() {
         let mut attrs = HashMap::new();
-        attrs.insert("http.url".to_string(), "https://api.example.com".to_string());
-        assert_eq!(SpanCategory::from_attributes("HTTP GET", 3, &attrs), SpanCategory::HttpClient);
+        attrs.insert(
+            "http.url".to_string(),
+            "https://api.example.com".to_string(),
+        );
+        assert_eq!(
+            SpanCategory::from_attributes("HTTP GET", 3, &attrs),
+            SpanCategory::HttpClient
+        );
     }
 
     #[test]
     fn test_span_category_job() {
         let mut attrs = HashMap::new();
         attrs.insert("messaging.system".to_string(), "sidekiq".to_string());
-        assert_eq!(SpanCategory::from_attributes("MyJob.perform", 0, &attrs), SpanCategory::Job);
+        assert_eq!(
+            SpanCategory::from_attributes("MyJob.perform", 0, &attrs),
+            SpanCategory::Job
+        );
     }
 
     #[test]
     fn test_span_category_command_rake() {
         let attrs = HashMap::new();
-        assert_eq!(SpanCategory::from_attributes("rake db:migrate", 0, &attrs), SpanCategory::Command);
-        assert_eq!(SpanCategory::from_attributes("rake:db:migrate", 0, &attrs), SpanCategory::Command);
+        assert_eq!(
+            SpanCategory::from_attributes("rake db:migrate", 0, &attrs),
+            SpanCategory::Command
+        );
+        assert_eq!(
+            SpanCategory::from_attributes("rake:db:migrate", 0, &attrs),
+            SpanCategory::Command
+        );
     }
 
     #[test]
     fn test_span_category_command_thor() {
         let attrs = HashMap::new();
-        assert_eq!(SpanCategory::from_attributes("thor:generate:model", 0, &attrs), SpanCategory::Command);
+        assert_eq!(
+            SpanCategory::from_attributes("thor:generate:model", 0, &attrs),
+            SpanCategory::Command
+        );
     }
 
     #[test]
     fn test_span_category_view() {
         let attrs = HashMap::new();
-        assert_eq!(SpanCategory::from_attributes("render_template users/index.html.erb", 0, &attrs), SpanCategory::View);
-        assert_eq!(SpanCategory::from_attributes("render_partial _header.html.erb", 0, &attrs), SpanCategory::View);
+        assert_eq!(
+            SpanCategory::from_attributes("render_template users/index.html.erb", 0, &attrs),
+            SpanCategory::View
+        );
+        assert_eq!(
+            SpanCategory::from_attributes("render_partial _header.html.erb", 0, &attrs),
+            SpanCategory::View
+        );
     }
 
     #[test]
@@ -1020,9 +1105,18 @@ mod tests {
     // RootSpanType tests
     #[test]
     fn test_root_span_type_from_category() {
-        assert_eq!(RootSpanType::from_category(SpanCategory::HttpServer), Some(RootSpanType::Web));
-        assert_eq!(RootSpanType::from_category(SpanCategory::Job), Some(RootSpanType::Job));
-        assert_eq!(RootSpanType::from_category(SpanCategory::Command), Some(RootSpanType::Command));
+        assert_eq!(
+            RootSpanType::from_category(SpanCategory::HttpServer),
+            Some(RootSpanType::Web)
+        );
+        assert_eq!(
+            RootSpanType::from_category(SpanCategory::Job),
+            Some(RootSpanType::Job)
+        );
+        assert_eq!(
+            RootSpanType::from_category(SpanCategory::Command),
+            Some(RootSpanType::Command)
+        );
         assert_eq!(RootSpanType::from_category(SpanCategory::Db), None);
         assert_eq!(RootSpanType::from_category(SpanCategory::Internal), None);
     }
@@ -1072,25 +1166,13 @@ mod tests {
 
     #[test]
     fn test_display_name_with_path_only() {
-        let trace = make_trace_summary(
-            "GET /orders",
-            Some("GET"),
-            Some("/orders"),
-            Some(200),
-            1,
-        );
+        let trace = make_trace_summary("GET /orders", Some("GET"), Some("/orders"), Some(200), 1);
         assert_eq!(trace.display_name(), "GET /orders");
     }
 
     #[test]
     fn test_display_name_extracts_from_span_name() {
-        let trace = make_trace_summary(
-            "POST /api/items",
-            Some("POST"),
-            None,
-            Some(201),
-            1,
-        );
+        let trace = make_trace_summary("POST /api/items", Some("POST"), None, Some(201), 1);
         assert_eq!(trace.display_name(), "POST /api/items");
     }
 

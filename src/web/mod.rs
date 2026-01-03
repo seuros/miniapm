@@ -9,7 +9,11 @@ pub mod project_context;
 mod projects;
 mod traces;
 
-use axum::{middleware, routing::{get, post}, Router};
+use axum::{
+    middleware,
+    routing::{get, post},
+    Router,
+};
 
 use crate::DbPool;
 
@@ -30,17 +34,28 @@ pub fn routes(pool: DbPool) -> Router<DbPool> {
         .route("/projects/regenerate-key", post(projects::regenerate_key))
         .route("/api-key", get(api_key::index))
         .route("/api-key/regenerate", post(api_key::regenerate))
-        .layer(middleware::from_fn_with_state(pool, auth_middleware::web_auth_middleware))
+        .layer(middleware::from_fn_with_state(
+            pool,
+            auth_middleware::web_auth_middleware,
+        ))
 }
 
 pub fn auth_routes() -> Router<DbPool> {
     Router::new()
-        .route("/auth/login", get(auth::login_page).post(auth::login_submit))
+        .route(
+            "/auth/login",
+            get(auth::login_page).post(auth::login_submit),
+        )
         .route("/auth/logout", post(auth::logout))
-        .route("/auth/change-password", get(auth::change_password_page).post(auth::change_password_submit))
+        .route(
+            "/auth/change-password",
+            get(auth::change_password_page).post(auth::change_password_submit),
+        )
         .route("/auth/users", get(auth::users_page))
         .route("/auth/users/create", post(auth::create_user))
         .route("/auth/users/delete", post(auth::delete_user))
-        .route("/auth/invite/{token}", get(auth::invite_page).post(auth::invite_submit))
+        .route(
+            "/auth/invite/{token}",
+            get(auth::invite_page).post(auth::invite_submit),
+        )
 }
-

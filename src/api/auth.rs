@@ -34,9 +34,9 @@ pub async fn auth_middleware(
     // A default project is always created on startup
     match crate::models::project::find_by_api_key(&pool, api_key) {
         Ok(Some(project)) => {
-            request
-                .extensions_mut()
-                .insert(ProjectContext { project_id: Some(project.id) });
+            request.extensions_mut().insert(ProjectContext {
+                project_id: Some(project.id),
+            });
             Ok(next.run(request).await)
         }
         Ok(None) => Err(StatusCode::UNAUTHORIZED),
@@ -86,7 +86,10 @@ mod tests {
     fn create_app(pool: DbPool) -> Router {
         Router::new()
             .route("/test", get(handler))
-            .layer(middleware::from_fn_with_state(pool.clone(), auth_middleware))
+            .layer(middleware::from_fn_with_state(
+                pool.clone(),
+                auth_middleware,
+            ))
             .with_state(pool)
     }
 
@@ -95,10 +98,7 @@ mod tests {
         let pool = create_test_pool();
         let app = create_app(pool);
 
-        let req = Request::builder()
-            .uri("/test")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::builder().uri("/test").body(Body::empty()).unwrap();
 
         let response = app.oneshot(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);

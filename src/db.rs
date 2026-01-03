@@ -247,7 +247,10 @@ fn migrate(pool: &DbPool) -> anyhow::Result<()> {
     let _ = conn.execute("ALTER TABLE users ADD COLUMN invite_expires_at TEXT", []);
 
     // Add source_context column if it doesn't exist
-    let _ = conn.execute("ALTER TABLE error_occurrences ADD COLUMN source_context TEXT", []);
+    let _ = conn.execute(
+        "ALTER TABLE error_occurrences ADD COLUMN source_context TEXT",
+        [],
+    );
 
     tracing::debug!("Database schema initialized");
     Ok(())
@@ -255,6 +258,10 @@ fn migrate(pool: &DbPool) -> anyhow::Result<()> {
 
 pub fn get_db_size(pool: &DbPool) -> anyhow::Result<f64> {
     let conn = pool.get()?;
-    let size: i64 = conn.query_row("SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()", [], |row| row.get(0))?;
+    let size: i64 = conn.query_row(
+        "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()",
+        [],
+        |row| row.get(0),
+    )?;
     Ok(size as f64 / 1_048_576.0) // Convert to MB
 }

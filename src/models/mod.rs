@@ -13,5 +13,5 @@ pub use error::{AppError, ErrorOccurrence, SourceContext};
 pub use project::Project;
 pub use request::Request;
 pub use rollup::{DailyRollup, HourlyRollup};
-pub use span::{SpanCategory, RootSpanType, TraceSummary, TraceDetail, SpanDisplay};
+pub use span::{RootSpanType, SpanCategory, SpanDisplay, TraceDetail, TraceSummary};
 pub use user::User;

@@ -129,5 +129,9 @@ pub async fn show(
         vec![]
     };
 
-    TraceShowTemplate { trace, n_plus_1_issues, ctx }
+    TraceShowTemplate {
+        trace,
+        n_plus_1_issues,
+        ctx,
+    }
 }

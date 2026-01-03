@@ -159,9 +159,14 @@ fn handle_list_tools() -> anyhow::Result<serde_json::Value> {
     Ok(serde_json::json!({ "tools": tools }))
 }
 
-fn handle_tool_call(pool: &DbPool, params: Option<serde_json::Value>) -> anyhow::Result<serde_json::Value> {
+fn handle_tool_call(
+    pool: &DbPool,
+    params: Option<serde_json::Value>,
+) -> anyhow::Result<serde_json::Value> {
     let params = params.ok_or_else(|| anyhow::anyhow!("Missing params"))?;
-    let tool_name = params["name"].as_str().ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
+    let tool_name = params["name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
     let args = &params["arguments"];
 
     // MCP shows data across all projects (project_id = None)
@@ -173,7 +178,9 @@ fn handle_tool_call(pool: &DbPool, params: Option<serde_json::Value>) -> anyhow:
             serde_json::to_value(errors)?
         }
         "error_details" => {
-            let id = args["id"].as_i64().ok_or_else(|| anyhow::anyhow!("Missing id"))?;
+            let id = args["id"]
+                .as_i64()
+                .ok_or_else(|| anyhow::anyhow!("Missing id"))?;
             let error = models::error::find(pool, id)?;
             let occurrences = if error.is_some() {
                 models::error::occurrences(pool, id, 5)?

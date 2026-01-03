@@ -59,7 +59,6 @@ fn generate_token() -> String {
     hex::encode(bytes)
 }
 
-
 /// Create the default admin user if no users exist
 pub fn ensure_default_admin(pool: &DbPool) -> anyhow::Result<()> {
     let conn = pool.get()?;
@@ -106,10 +105,17 @@ pub fn authenticate(pool: &DbPool, username: &str, password: &str) -> anyhow::Re
         .ok();
 
     match user {
-        Some(ref u) if u.password_hash.as_ref().map_or(false, |h| verify_password(password, h)) => {
+        Some(ref u)
+            if u.password_hash
+                .as_ref()
+                .map_or(false, |h| verify_password(password, h)) =>
+        {
             // Update last login time
             let now = Utc::now().to_rfc3339();
-            let _ = conn.execute("UPDATE users SET last_login_at = ?1 WHERE id = ?2", (&now, u.id));
+            let _ = conn.execute(
+                "UPDATE users SET last_login_at = ?1 WHERE id = ?2",
+                (&now, u.id),
+            );
             Ok(user)
         }
         _ => Ok(None),
@@ -209,7 +215,12 @@ pub fn list_all(pool: &DbPool) -> anyhow::Result<Vec<User>> {
 }
 
 /// Create a new user (admin only)
-pub fn create(pool: &DbPool, username: &str, password: &str, is_admin: bool) -> anyhow::Result<i64> {
+pub fn create(
+    pool: &DbPool,
+    username: &str,
+    password: &str,
+    is_admin: bool,
+) -> anyhow::Result<i64> {
     let conn = pool.get()?;
     let password_hash = hash_password(password)?;
     let now = Utc::now().to_rfc3339();

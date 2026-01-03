@@ -24,7 +24,11 @@ pub struct IncomingDeploy {
     pub timestamp: Option<String>,
 }
 
-pub fn insert(pool: &DbPool, deploy: &IncomingDeploy, project_id: Option<i64>) -> anyhow::Result<i64> {
+pub fn insert(
+    pool: &DbPool,
+    deploy: &IncomingDeploy,
+    project_id: Option<i64>,
+) -> anyhow::Result<i64> {
     let conn = pool.get()?;
     let now = Utc::now().to_rfc3339();
     let timestamp = deploy.timestamp.as_ref().unwrap_or(&now);
@@ -81,7 +85,11 @@ pub fn list(pool: &DbPool, project_id: Option<i64>, limit: i64) -> anyhow::Resul
 }
 
 /// Get deploys within a time range for chart markers
-pub fn list_since(pool: &DbPool, project_id: Option<i64>, since: &str) -> anyhow::Result<Vec<Deploy>> {
+pub fn list_since(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+) -> anyhow::Result<Vec<Deploy>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         r#"

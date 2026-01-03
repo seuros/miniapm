@@ -83,7 +83,8 @@ pub async fn index(
     )
     .unwrap_or_default();
 
-    let hourly_errors = models::error::hourly_error_stats(&pool, project_id, 24).unwrap_or_default();
+    let hourly_errors =
+        models::error::hourly_error_stats(&pool, project_id, 24).unwrap_or_default();
 
     ErrorsIndexTemplate {
         errors,
@@ -108,7 +109,11 @@ pub struct ErrorShowTemplate {
     pub ctx: WebProjectContext,
 }
 
-pub async fn show(State(pool): State<DbPool>, cookies: Cookies, Path(id): Path<i64>) -> ErrorShowTemplate {
+pub async fn show(
+    State(pool): State<DbPool>,
+    cookies: Cookies,
+    Path(id): Path<i64>,
+) -> ErrorShowTemplate {
     let ctx = get_project_context(&pool, &cookies);
     let error = models::error::find(&pool, id).unwrap_or(None);
     let occurrences = if error.is_some() {
@@ -118,7 +123,12 @@ pub async fn show(State(pool): State<DbPool>, cookies: Cookies, Path(id): Path<i
     };
     let trend_24h = models::error::error_trend_24h(&pool, id).unwrap_or_default();
 
-    ErrorShowTemplate { error, occurrences, trend_24h, ctx }
+    ErrorShowTemplate {
+        error,
+        occurrences,
+        trend_24h,
+        ctx,
+    }
 }
 
 #[derive(Deserialize)]

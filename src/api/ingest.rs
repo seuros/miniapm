@@ -13,7 +13,11 @@ pub async fn ingest_requests(
 ) -> StatusCode {
     match request::insert_batch(&pool, &batch, ctx.project_id) {
         Ok(count) => {
-            tracing::debug!("Ingested {} requests (project_id={:?})", count, ctx.project_id);
+            tracing::debug!(
+                "Ingested {} requests (project_id={:?})",
+                count,
+                ctx.project_id
+            );
             StatusCode::ACCEPTED
         }
         Err(e) => {

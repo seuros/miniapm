@@ -82,13 +82,18 @@ pub struct IncomingSourceContext {
 /// Minimum similarity threshold for grouping errors (50%)
 const SIMILARITY_THRESHOLD: f64 = 0.5;
 
-pub fn insert(pool: &DbPool, error: &IncomingError, project_id: Option<i64>) -> anyhow::Result<i64> {
+pub fn insert(
+    pool: &DbPool,
+    error: &IncomingError,
+    project_id: Option<i64>,
+) -> anyhow::Result<i64> {
     let conn = pool.get()?;
     let now = Utc::now().to_rfc3339();
     let timestamp = error.timestamp.as_ref().unwrap_or(&now);
 
     // Generate location-based fingerprint for smart grouping
-    let location_fingerprint = generate_location_fingerprint(&error.exception_class, &error.backtrace);
+    let location_fingerprint =
+        generate_location_fingerprint(&error.exception_class, &error.backtrace);
 
     // Try to find existing error by:
     // 1. First check exact fingerprint match (backward compatibility)
@@ -110,7 +115,8 @@ pub fn insert(pool: &DbPool, error: &IncomingError, project_id: Option<i64>) -> 
         id
     } else {
         // Try to find similar error by location + message similarity
-        let similar_error = find_similar_error(&conn, project_id, &location_fingerprint, &error.message)?;
+        let similar_error =
+            find_similar_error(&conn, project_id, &location_fingerprint, &error.message)?;
 
         if let Some(id) = similar_error {
             // Found similar error - group with it
@@ -140,16 +146,20 @@ pub fn insert(pool: &DbPool, error: &IncomingError, project_id: Option<i64>) -> 
     };
 
     // Convert IncomingSourceContext to SourceContext for storage
-    let source_context_json = error.source_context.as_ref().map(|sc| {
-        let ctx = SourceContext {
-            file: sc.file.clone(),
-            lineno: sc.lineno,
-            pre_context: sc.pre_context.clone().unwrap_or_default(),
-            context_line: sc.context_line.clone(),
-            post_context: sc.post_context.clone().unwrap_or_default(),
-        };
-        serde_json::to_string(&ctx).ok()
-    }).flatten();
+    let source_context_json = error
+        .source_context
+        .as_ref()
+        .map(|sc| {
+            let ctx = SourceContext {
+                file: sc.file.clone(),
+                lineno: sc.lineno,
+                pre_context: sc.pre_context.clone().unwrap_or_default(),
+                context_line: sc.context_line.clone(),
+                post_context: sc.post_context.clone().unwrap_or_default(),
+            };
+            serde_json::to_string(&ctx).ok()
+        })
+        .flatten();
 
     // Insert occurrence
     conn.execute(
@@ -200,7 +210,12 @@ fn find_similar_error(
     Ok(None)
 }
 
-pub fn list(pool: &DbPool, project_id: Option<i64>, status: Option<&str>, limit: i64) -> anyhow::Result<Vec<AppError>> {
+pub fn list(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    status: Option<&str>,
+    limit: i64,
+) -> anyhow::Result<Vec<AppError>> {
     list_filtered(pool, project_id, status, None, None, "last_seen", limit)
 }
 
@@ -308,7 +323,11 @@ pub fn find(pool: &DbPool, id: i64) -> anyhow::Result<Option<AppError>> {
     Ok(error)
 }
 
-pub fn occurrences(pool: &DbPool, error_id: i64, limit: i64) -> anyhow::Result<Vec<ErrorOccurrence>> {
+pub fn occurrences(
+    pool: &DbPool,
+    error_id: i64,
+    limit: i64,
+) -> anyhow::Result<Vec<ErrorOccurrence>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         "SELECT id, error_id, request_id, user_id, backtrace, params,
@@ -357,7 +376,10 @@ pub fn update_status(pool: &DbPool, id: i64, status: &str) -> anyhow::Result<()>
 
 pub fn delete_occurrences_before(pool: &DbPool, before: &str) -> anyhow::Result<usize> {
     let conn = pool.get()?;
-    let deleted = conn.execute("DELETE FROM error_occurrences WHERE happened_at < ?1", [before])?;
+    let deleted = conn.execute(
+        "DELETE FROM error_occurrences WHERE happened_at < ?1",
+        [before],
+    )?;
     Ok(deleted)
 }
 
@@ -369,7 +391,11 @@ pub struct ErrorTrendPoint {
 }
 
 /// Get hourly error occurrence counts for a specific error (for trend sparklines)
-pub fn error_trend(pool: &DbPool, error_id: i64, hours: i64) -> anyhow::Result<Vec<ErrorTrendPoint>> {
+pub fn error_trend(
+    pool: &DbPool,
+    error_id: i64,
+    hours: i64,
+) -> anyhow::Result<Vec<ErrorTrendPoint>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         r#"
@@ -445,7 +471,11 @@ pub fn error_trend_24h(pool: &DbPool, error_id: i64) -> anyhow::Result<Vec<i64>>
 }
 
 /// Get overall hourly error counts (for error index chart)
-pub fn hourly_error_stats(pool: &DbPool, project_id: Option<i64>, hours: i64) -> anyhow::Result<Vec<ErrorTrendPoint>> {
+pub fn hourly_error_stats(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    hours: i64,
+) -> anyhow::Result<Vec<ErrorTrendPoint>> {
     let conn = pool.get()?;
 
     let mut stmt = conn.prepare(
@@ -519,11 +549,22 @@ fn text_similarity(a: &str, b: &str) -> f64 {
 fn extract_error_location(backtrace: &[String]) -> Option<String> {
     // Common patterns for library/framework code to skip
     let skip_patterns = [
-        "/gems/", "/vendor/", "/ruby/", "/lib/ruby/",
-        "node_modules/", "/usr/lib/", "/usr/local/lib/",
-        "<internal:", "(eval)", "(irb)",
-        "/activerecord-", "/activesupport-", "/actionpack-",
-        "/rack-", "/railties-", "/bundler/",
+        "/gems/",
+        "/vendor/",
+        "/ruby/",
+        "/lib/ruby/",
+        "node_modules/",
+        "/usr/lib/",
+        "/usr/local/lib/",
+        "<internal:",
+        "(eval)",
+        "(irb)",
+        "/activerecord-",
+        "/activesupport-",
+        "/actionpack-",
+        "/rack-",
+        "/railties-",
+        "/bundler/",
     ];
 
     for frame in backtrace {
@@ -661,11 +702,12 @@ mod tests {
 
     #[test]
     fn test_generate_location_fingerprint() {
-        let backtrace = vec![
-            "app/models/user.rb:42:in `save'".to_string(),
-        ];
+        let backtrace = vec!["app/models/user.rb:42:in `save'".to_string()];
         let fingerprint = generate_location_fingerprint("ActiveRecord::RecordInvalid", &backtrace);
-        assert_eq!(fingerprint, "ActiveRecord::RecordInvalid:app/models/user.rb:42");
+        assert_eq!(
+            fingerprint,
+            "ActiveRecord::RecordInvalid:app/models/user.rb:42"
+        );
     }
 
     #[test]
@@ -681,7 +723,11 @@ mod tests {
         let msg1 = "Couldn't find User with 'id'=123";
         let msg2 = "Couldn't find User with 'id'=456";
         let sim = text_similarity(msg1, msg2);
-        assert!(sim >= SIMILARITY_THRESHOLD, "Similar errors should group: similarity = {}", sim);
+        assert!(
+            sim >= SIMILARITY_THRESHOLD,
+            "Similar errors should group: similarity = {}",
+            sim
+        );
     }
 
     #[test]
@@ -690,6 +736,10 @@ mod tests {
         let msg1 = "undefined method 'foo' for nil:NilClass";
         let msg2 = "PG::ConnectionBad: connection refused";
         let sim = text_similarity(msg1, msg2);
-        assert!(sim < SIMILARITY_THRESHOLD, "Different errors should not group: similarity = {}", sim);
+        assert!(
+            sim < SIMILARITY_THRESHOLD,
+            "Different errors should not group: similarity = {}",
+            sim
+        );
     }
 }

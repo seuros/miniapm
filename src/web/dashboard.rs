@@ -3,7 +3,10 @@ use axum::extract::State;
 use chrono::{Duration, Utc};
 use tower_cookies::Cookies;
 
-use crate::{models::{self, deploy::Deploy}, DbPool};
+use crate::{
+    models::{self, deploy::Deploy},
+    DbPool,
+};
 
 use super::project_context::{get_project_context, WebProjectContext};
 
@@ -29,10 +32,16 @@ pub async fn index(State(pool): State<DbPool>, cookies: Cookies) -> DashboardTem
 
     let requests_24h = models::request::count_since(&pool, project_id, &since).unwrap_or(0);
     let errors_24h = models::error::count_since(&pool, project_id, &since).unwrap_or(0);
-    let latency_stats = models::request::latency_stats_since(&pool, project_id, &since)
-        .unwrap_or(models::request::LatencyStats { avg_ms: 0, p95_ms: 0, p99_ms: 0 });
+    let latency_stats = models::request::latency_stats_since(&pool, project_id, &since).unwrap_or(
+        models::request::LatencyStats {
+            avg_ms: 0,
+            p95_ms: 0,
+            p99_ms: 0,
+        },
+    );
     let recent_errors = models::error::list(&pool, project_id, Some("open"), 5).unwrap_or_default();
-    let slow_requests = models::request::slow_display(&pool, project_id, 500.0, 5).unwrap_or_default();
+    let slow_requests =
+        models::request::slow_display(&pool, project_id, 500.0, 5).unwrap_or_default();
     let hourly_stats = models::request::hourly_stats(&pool, project_id, 24).unwrap_or_default();
     let deploys = models::deploy::list_since(&pool, project_id, &since).unwrap_or_default();
 

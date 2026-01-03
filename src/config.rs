@@ -44,7 +44,8 @@ impl Config {
         });
 
         Ok(Self {
-            sqlite_path: env::var("SQLITE_PATH").unwrap_or_else(|_| "./data/miniapm.db".to_string()),
+            sqlite_path: env::var("SQLITE_PATH")
+                .unwrap_or_else(|_| "./data/miniapm.db".to_string()),
             api_key: env::var("MINI_APM_API_KEY").ok(),
             retention_days_requests: env::var("RETENTION_DAYS_REQUESTS")
                 .ok()

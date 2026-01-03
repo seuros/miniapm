@@ -21,10 +21,7 @@ pub struct HealthResponse {
 }
 
 pub async fn health_handler(State(pool): State<DbPool>) -> (StatusCode, Json<HealthResponse>) {
-    let uptime_seconds = START_TIME
-        .get()
-        .map(|t| t.elapsed().as_secs())
-        .unwrap_or(0);
+    let uptime_seconds = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
 
     // Actually verify database connectivity
     let db_ok = match pool.get() {

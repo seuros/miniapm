@@ -16,10 +16,7 @@ pub struct ApiKeyTemplate {
     pub ctx: WebProjectContext,
 }
 
-pub async fn index(
-    State(pool): State<DbPool>,
-    cookies: Cookies,
-) -> ApiKeyTemplate {
+pub async fn index(State(pool): State<DbPool>, cookies: Cookies) -> ApiKeyTemplate {
     let ctx = get_project_context(&pool, &cookies);
 
     // Get the default project's API key
@@ -30,9 +27,7 @@ pub async fn index(
     ApiKeyTemplate { api_key, ctx }
 }
 
-pub async fn regenerate(
-    State(pool): State<DbPool>,
-) -> impl IntoResponse {
+pub async fn regenerate(State(pool): State<DbPool>) -> impl IntoResponse {
     // Get the default project and regenerate its key
     if let Ok(project) = project::ensure_default_project(&pool) {
         let _ = project::regenerate_api_key(&pool, project.id);
