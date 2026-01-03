@@ -80,7 +80,7 @@ pub fn ensure_default_project(pool: &DbPool) -> anyhow::Result<Project> {
 pub fn list_all(pool: &DbPool) -> anyhow::Result<Vec<Project>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
-        "SELECT id, name, slug, api_key, created_at FROM projects ORDER BY name",
+        "SELECT id, name, slug, api_key, strftime('%Y-%m-%d %H:%M', created_at) FROM projects ORDER BY name",
     )?;
 
     let projects = stmt
@@ -167,24 +167,80 @@ pub fn find_by_api_key(pool: &DbPool, api_key: &str) -> anyhow::Result<Option<Pr
     Ok(project)
 }
 
+/// Result of creating a project, includes migration info
+pub struct CreateProjectResult {
+    pub project: Project,
+    pub migrated_requests: usize,
+    pub migrated_errors: usize,
+    pub migrated_spans: usize,
+}
+
 /// Create a new project
-pub fn create(pool: &DbPool, name: &str) -> anyhow::Result<Project> {
-    let conn = pool.get()?;
+pub fn create(pool: &DbPool, name: &str) -> anyhow::Result<CreateProjectResult> {
+    let mut conn = pool.get()?;
+
+    // Use a transaction to ensure atomicity of project creation and data migration
+    let tx = conn.transaction()?;
+
+    // Check if this is the first project
+    let is_first: bool = tx.query_row(
+        "SELECT COUNT(*) = 0 FROM projects",
+        [],
+        |row| row.get(0),
+    )?;
+
     let now = Utc::now().to_rfc3339();
     let slug = slugify(name);
     let api_key = generate_api_key();
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO projects (name, slug, api_key, created_at) VALUES (?1, ?2, ?3, ?4)",
         (name, &slug, &api_key, &now),
     )?;
 
-    Ok(Project {
-        id: conn.last_insert_rowid(),
-        name: name.to_string(),
-        slug,
-        api_key,
-        created_at: now,
+    let project_id = tx.last_insert_rowid();
+
+    // If this is the first project, migrate all orphan data to it
+    let (migrated_requests, migrated_errors, migrated_spans) = if is_first {
+        let requests = tx.execute(
+            "UPDATE requests SET project_id = ?1 WHERE project_id IS NULL",
+            [project_id],
+        )?;
+        let errors = tx.execute(
+            "UPDATE errors SET project_id = ?1 WHERE project_id IS NULL",
+            [project_id],
+        )?;
+        let spans = tx.execute(
+            "UPDATE spans SET project_id = ?1 WHERE project_id IS NULL",
+            [project_id],
+        )?;
+
+        if requests > 0 || errors > 0 || spans > 0 {
+            tracing::info!(
+                "Migrated orphan data to first project '{}': {} requests, {} errors, {} spans",
+                name, requests, errors, spans
+            );
+        }
+
+        (requests, errors, spans)
+    } else {
+        (0, 0, 0)
+    };
+
+    // Commit the transaction
+    tx.commit()?;
+
+    Ok(CreateProjectResult {
+        project: Project {
+            id: project_id,
+            name: name.to_string(),
+            slug,
+            api_key,
+            created_at: now,
+        },
+        migrated_requests,
+        migrated_errors,
+        migrated_spans,
     })
 }
 

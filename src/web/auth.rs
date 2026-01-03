@@ -8,7 +8,9 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::Deserialize;
 use time::Duration;
 
-use crate::{models, config::Config, DbPool};
+use crate::{config::Config, models, DbPool};
+
+use super::project_context::{get_project_context, WebProjectContext};
 
 const SESSION_COOKIE: &str = "miniapm_session";
 
@@ -35,6 +37,7 @@ pub struct UsersTemplate {
     pub error: Option<String>,
     pub success: Option<String>,
     pub invite_url: Option<String>,
+    pub ctx: WebProjectContext,
 }
 
 #[derive(Template)]
@@ -192,10 +195,10 @@ pub async fn change_password_submit(
         .into_response();
     }
 
-    if form.new_password.len() < 4 {
+    if form.new_password.len() < 8 {
         return Html(
             ChangePasswordTemplate {
-                error: Some("Password must be at least 4 characters".to_string()),
+                error: Some("Password must be at least 8 characters".to_string()),
                 username: user.username,
             }
             .render()
@@ -239,6 +242,7 @@ pub async fn change_password_submit(
 pub async fn users_page(
     State(pool): State<DbPool>,
     jar: CookieJar,
+    cookies: tower_cookies::Cookies,
 ) -> Response {
     let Some(user) = get_current_user(&pool, &jar) else {
         return Redirect::to("/auth/login").into_response();
@@ -249,6 +253,7 @@ pub async fn users_page(
     }
 
     let users = models::user::list_all(&pool).unwrap_or_default();
+    let ctx = get_project_context(&pool, &cookies);
 
     Html(
         UsersTemplate {
@@ -257,6 +262,7 @@ pub async fn users_page(
             error: None,
             success: None,
             invite_url: None,
+            ctx,
         }
         .render()
         .unwrap_or_default(),
@@ -267,6 +273,7 @@ pub async fn users_page(
 pub async fn create_user(
     State(pool): State<DbPool>,
     jar: CookieJar,
+    cookies: tower_cookies::Cookies,
     Form(form): Form<CreateUserForm>,
 ) -> Response {
     let Some(user) = get_current_user(&pool, &jar) else {
@@ -277,6 +284,8 @@ pub async fn create_user(
         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
 
+    let ctx = get_project_context(&pool, &cookies);
+
     if form.username.is_empty() {
         let users = models::user::list_all(&pool).unwrap_or_default();
         return Html(
@@ -286,6 +295,7 @@ pub async fn create_user(
                 error: Some("Username is required".to_string()),
                 success: None,
                 invite_url: None,
+                ctx,
             }
             .render()
             .unwrap_or_default(),
@@ -298,7 +308,9 @@ pub async fn create_user(
     match models::user::create_with_invite(&pool, &form.username, is_admin) {
         Ok(invite_token) => {
             let users = models::user::list_all(&pool).unwrap_or_default();
-            let invite_url = format!("/auth/invite/{}", invite_token);
+            let base_url = std::env::var("MINI_APM_URL")
+                .unwrap_or_else(|_| "http://localhost:3000".to_string());
+            let invite_url = format!("{}/auth/invite/{}", base_url.trim_end_matches('/'), invite_token);
             Html(
                 UsersTemplate {
                     users,
@@ -306,6 +318,7 @@ pub async fn create_user(
                     error: None,
                     success: Some(format!("User '{}' created", form.username)),
                     invite_url: Some(invite_url),
+                    ctx,
                 }
                 .render()
                 .unwrap_or_default(),
@@ -321,6 +334,7 @@ pub async fn create_user(
                     error: Some("Failed to create user (username may already exist)".to_string()),
                     success: None,
                     invite_url: None,
+                    ctx,
                 }
                 .render()
                 .unwrap_or_default(),
@@ -338,6 +352,7 @@ pub struct DeleteUserForm {
 pub async fn delete_user(
     State(pool): State<DbPool>,
     jar: CookieJar,
+    cookies: tower_cookies::Cookies,
     Form(form): Form<DeleteUserForm>,
 ) -> Response {
     let Some(user) = get_current_user(&pool, &jar) else {
@@ -348,6 +363,8 @@ pub async fn delete_user(
         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
 
+    let ctx = get_project_context(&pool, &cookies);
+
     if form.user_id == user.id {
         let users = models::user::list_all(&pool).unwrap_or_default();
         return Html(
@@ -357,6 +374,7 @@ pub async fn delete_user(
                 error: Some("Cannot delete yourself".to_string()),
                 success: None,
                 invite_url: None,
+                ctx,
             }
             .render()
             .unwrap_or_default(),
@@ -374,6 +392,7 @@ pub async fn delete_user(
                     error: None,
                     success: Some("User deleted".to_string()),
                     invite_url: None,
+                    ctx,
                 }
                 .render()
                 .unwrap_or_default(),
@@ -389,6 +408,7 @@ pub async fn delete_user(
                     error: Some("Failed to delete user".to_string()),
                     success: None,
                     invite_url: None,
+                    ctx,
                 }
                 .render()
                 .unwrap_or_default(),
@@ -447,11 +467,11 @@ pub async fn invite_submit(
         .into_response();
     }
 
-    if form.password.len() < 4 {
+    if form.password.len() < 8 {
         return Html(
             InviteTemplate {
                 username: user.username,
-                error: Some("Password must be at least 4 characters".to_string()),
+                error: Some("Password must be at least 8 characters".to_string()),
             }
             .render()
             .unwrap_or_default(),

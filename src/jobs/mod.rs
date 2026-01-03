@@ -1,11 +1,29 @@
 mod retention;
 mod rollup;
 
-use crate::{config::Config, DbPool};
+use crate::{config::Config, models, DbPool};
 use std::time::Duration;
 use tokio::time::interval;
 
 pub fn start(pool: DbPool, config: Config) {
+    // Session cleanup job - runs hourly
+    let pool_clone = pool.clone();
+    tokio::spawn(async move {
+        let mut interval = interval(Duration::from_secs(3600)); // Every hour
+        loop {
+            interval.tick().await;
+            match models::user::delete_expired_sessions(&pool_clone) {
+                Ok(count) if count > 0 => {
+                    tracing::info!("Cleaned up {} expired sessions", count);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!("Session cleanup failed: {}", e);
+                }
+            }
+        }
+    });
+
     // Hourly rollup job
     let pool_clone = pool.clone();
     tokio::spawn(async move {
