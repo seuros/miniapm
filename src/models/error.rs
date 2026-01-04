@@ -477,7 +477,7 @@ pub fn hourly_error_stats(
 
     let mut stmt = conn.prepare(
         r#"
-        SELECT strftime('%H:00', eo.happened_at) as hour_label, COUNT(*) as cnt
+        SELECT strftime('%Y-%m-%d %H:00', eo.happened_at) as hour_label, COUNT(*) as cnt
         FROM error_occurrences eo
         JOIN errors e ON e.id = eo.error_id
         WHERE eo.happened_at >= datetime('now', '-' || ?2 || ' hours')
@@ -487,14 +487,24 @@ pub fn hourly_error_stats(
         "#,
     )?;
 
-    let points = stmt
+    // Collect data into a HashMap for lookup
+    let data_points: std::collections::HashMap<String, i64> = stmt
         .query_map(rusqlite::params![project_id, hours], |row| {
-            Ok(ErrorTrendPoint {
-                hour: row.get(0)?,
-                count: row.get(1)?,
-            })
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         })?
-        .collect::<Result<Vec<_>, _>>()?;
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Fill in all hours with zeros for missing data
+    let mut points = Vec::with_capacity(hours as usize);
+    for i in (0..hours).rev() {
+        let hour = chrono::Utc::now() - chrono::Duration::hours(i);
+        let hour_key = hour.format("%Y-%m-%d %H:00").to_string();
+        points.push(ErrorTrendPoint {
+            hour: hour_key.clone(),
+            count: *data_points.get(&hour_key).unwrap_or(&0),
+        });
+    }
 
     Ok(points)
 }

@@ -118,7 +118,9 @@
         data.forEach((d, i) => {
             if (i % labelStep === 0 || i === data.length - 1) {
                 const x = padding.left + i * stepX;
-                ctx.fillText(d.label, x, height - 5);
+                // Extract just the hour from "2026-01-04 01:00" format
+                const hour = d.label.split(' ')[1] || d.label;
+                ctx.fillText(hour, x, height - 5);
             }
         });
     }
