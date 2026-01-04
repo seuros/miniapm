@@ -19,8 +19,10 @@ FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates curl
 
+WORKDIR /app
+
 COPY --from=builder /app/target/release/miniapm /usr/local/bin/
-COPY static /static
+COPY static ./static
 
 ENV SQLITE_PATH=/data/miniapm.db
 VOLUME /data
