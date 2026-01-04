@@ -164,25 +164,32 @@ fn handle_tool_call(
                 "30d" => Utc::now() - Duration::days(30),
                 _ => Utc::now() - Duration::hours(24),
             };
-            let routes = models::request::routes_summary(pool, None, &since.to_rfc3339(), limit)
-                .map_err(|e| e.to_string())?;
+            let routes = models::span::routes_summary(
+                pool,
+                None,
+                &since.to_rfc3339(),
+                None,
+                "avg",
+                limit,
+            )
+            .map_err(|e| e.to_string())?;
             serde_json::to_value(routes).map_err(|e| e.to_string())?
         }
         "system_status" => {
             let since_24h = (Utc::now() - Duration::hours(24)).to_rfc3339();
             let requests_24h =
-                models::request::count_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
+                models::span::count_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
             let errors_24h =
                 models::error::count_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
-            let avg_ms =
-                models::request::avg_ms_since(pool, None, &since_24h).map_err(|e| e.to_string())?;
+            let latency_stats = models::span::latency_stats_since(pool, None, &since_24h)
+                .map_err(|e| e.to_string())?;
             let db_size = crate::db::get_db_size(pool).map_err(|e| e.to_string())?;
 
             serde_json::json!({
                 "requests_24h": requests_24h,
                 "errors_24h": errors_24h,
                 "error_rate": if requests_24h > 0 { errors_24h as f64 / requests_24h as f64 } else { 0.0 },
-                "avg_response_ms": avg_ms,
+                "avg_response_ms": latency_stats.avg_ms,
                 "db_size_mb": db_size
             })
         }

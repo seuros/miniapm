@@ -111,8 +111,8 @@
                 <tbody>
                     {% for req in slow_requests %}
                     <tr>
-                        <td class="route-cell"><a href="/performance?search={{ req.path }}">{{ req.method }} {{ req.path }}</a></td>
-                        <td class="num">{{ req.total_ms }}ms</td>
+                        <td class="route-cell"><a href="/traces/{{ req.trace_id }}">{{ req.display_name() }}</a></td>
+                        <td class="num">{{ req.duration_ms_rounded() }}ms</td>
                         <td>{{ req.happened_at }}</td>
                     </tr>
                     {% endfor %}
@@ -129,7 +129,7 @@
 (function() {
     const data = [
         {% for point in hourly_stats %}
-        { label: "{{ point.label }}", requests: {{ point.requests }}, avg_ms: {{ point.avg_ms }} },
+        { label: "{{ point.hour }}", requests: {{ point.count }}, avg_ms: {{ point.avg_ms }} },
         {% endfor %}
     ];
 

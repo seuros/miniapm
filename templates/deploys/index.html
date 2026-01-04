@@ -47,7 +47,7 @@
                 {% for deploy in deploys %}
                 <tr>
                     <td>{{ deploy.version.as_deref().unwrap_or("-") }}</td>
-                    <td><code>{{ deploy.git_sha|truncate(7) }}</code></td>
+                    <td><code>{{ deploy.short_sha() }}</code></td>
                     <td>{{ deploy.env.as_deref().unwrap_or("-") }}</td>
                     <td>{{ deploy.deployer.as_deref().unwrap_or("-") }}</td>
                     <td>{{ deploy.deployed_at }}</td>

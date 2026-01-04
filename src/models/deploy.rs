@@ -14,6 +14,16 @@ pub struct Deploy {
     pub deployer: Option<String>,
 }
 
+impl Deploy {
+    pub fn short_sha(&self) -> &str {
+        if self.git_sha.len() >= 7 {
+            &self.git_sha[..7]
+        } else {
+            &self.git_sha
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct IncomingDeploy {
     pub git_sha: String,

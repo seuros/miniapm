@@ -4,18 +4,17 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tower_cookies::Cookies;
 
-use crate::{models, DbPool};
+use crate::{models::span, DbPool};
 
 use super::project_context::{get_project_context, WebProjectContext};
 
 #[derive(Template)]
 #[template(path = "performance/index.html")]
 pub struct RoutesTemplate {
-    pub routes: Vec<models::request::RouteSummary>,
+    pub routes: Vec<span::RouteSummary>,
     pub total_count: i64,
     pub max_requests: i64,
     pub period: String,
-    pub method: Option<String>,
     pub search: Option<String>,
     pub sort: String,
     pub ctx: WebProjectContext,
@@ -24,7 +23,6 @@ pub struct RoutesTemplate {
 #[derive(Deserialize)]
 pub struct RoutesQuery {
     pub period: Option<String>,
-    pub method: Option<String>,
     pub search: Option<String>,
     pub sort: Option<String>,
 }
@@ -39,7 +37,6 @@ pub async fn index(
 
     let period = query.period.unwrap_or_else(|| "24h".to_string());
     let sort = query.sort.unwrap_or_else(|| "requests".to_string());
-    let method = query.method.clone();
     let search = query.search.clone().filter(|s| !s.is_empty());
 
     let since = match period.as_str() {
@@ -51,22 +48,20 @@ pub async fn index(
 
     let since_str = since.to_rfc3339();
 
-    let routes = models::request::routes_summary_filtered(
+    let routes = span::routes_summary(
         &pool,
         project_id,
         &since_str,
-        method.as_deref(),
         search.as_deref(),
         &sort,
         100,
     )
     .unwrap_or_default();
 
-    let total_count = models::request::routes_count(
+    let total_count = span::routes_count(
         &pool,
         project_id,
         &since_str,
-        method.as_deref(),
         search.as_deref(),
     )
     .unwrap_or(0);
@@ -78,7 +73,6 @@ pub async fn index(
         total_count,
         max_requests,
         period,
-        method,
         search,
         sort,
         ctx,

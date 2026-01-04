@@ -4,7 +4,6 @@ use std::env;
 pub struct Config {
     pub sqlite_path: String,
     pub api_key: Option<String>,
-    pub retention_days_requests: i64,
     pub retention_days_errors: i64,
     pub retention_days_hourly_rollups: i64,
     pub retention_days_spans: i64,
@@ -47,11 +46,6 @@ impl Config {
             sqlite_path: env::var("SQLITE_PATH")
                 .unwrap_or_else(|_| "./data/miniapm.db".to_string()),
             api_key: env::var("MINI_APM_API_KEY").ok(),
-            retention_days_requests: env::var("RETENTION_DAYS_REQUESTS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .filter(|&v| v > 0)
-                .unwrap_or(7),
             retention_days_errors: env::var("RETENTION_DAYS_ERRORS")
                 .ok()
                 .and_then(|v| v.parse().ok())

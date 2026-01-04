@@ -328,6 +328,11 @@ impl TraceSummary {
             "OK".to_string()
         }
     }
+
+    /// Returns duration in ms rounded to nearest integer
+    pub fn duration_ms_rounded(&self) -> i64 {
+        self.duration_ms.round() as i64
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -396,6 +401,96 @@ fn decode_id(s: &str) -> String {
 // ============================================================================
 // Database Operations
 // ============================================================================
+
+use crate::models::error as app_error;
+use sha2::{Digest, Sha256};
+
+/// Backfill errors from existing spans that have exception events
+/// This is useful for extracting errors from spans that were ingested before error extraction was added
+pub fn backfill_errors_from_spans(pool: &DbPool) -> anyhow::Result<usize> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT project_id, trace_id, events_json, happened_at
+        FROM spans
+        WHERE events_json IS NOT NULL
+          AND events_json != '[]'
+          AND events_json LIKE '%exception%'
+        "#,
+    )?;
+
+    let mut count = 0;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, Option<i64>>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+        ))
+    })?;
+
+    for row in rows {
+        let (project_id, trace_id, events_json, happened_at) = row?;
+        if let Ok(events) = serde_json::from_str::<Vec<SpanEvent>>(&events_json) {
+            let events_opt = Some(events);
+            extract_and_insert_errors(pool, &events_opt, &trace_id, &happened_at, project_id);
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
+/// Extract exception events from OTLP span and insert as errors
+fn extract_and_insert_errors(
+    pool: &DbPool,
+    events: &Option<Vec<SpanEvent>>,
+    trace_id: &str,
+    happened_at: &str,
+    project_id: Option<i64>,
+) {
+    let events = match events {
+        Some(e) => e,
+        None => return,
+    };
+
+    for event in events {
+        if event.name != "exception" {
+            continue;
+        }
+
+        let attrs = parse_attributes(&event.attributes);
+        let exception_type = match attrs.get("exception.type") {
+            Some(t) => t.clone(),
+            None => continue,
+        };
+        let message = attrs.get("exception.message").cloned().unwrap_or_default();
+        let stacktrace = attrs.get("exception.stacktrace").cloned().unwrap_or_default();
+        let backtrace: Vec<String> = stacktrace.lines().map(|s| s.to_string()).collect();
+
+        // Generate fingerprint from exception type + first backtrace line
+        let first_line = backtrace.first().map(|s| s.as_str()).unwrap_or("");
+        let mut hasher = Sha256::new();
+        hasher.update(format!("{}:{}", exception_type, first_line));
+        let fingerprint = format!("{:x}", hasher.finalize());
+
+        let incoming_error = app_error::IncomingError {
+            exception_class: exception_type,
+            message,
+            backtrace,
+            fingerprint,
+            request_id: Some(trace_id.to_string()),
+            user_id: None,
+            params: None,
+            timestamp: Some(happened_at.to_string()),
+            source_context: None,
+        };
+
+        if let Err(e) = app_error::insert(pool, &incoming_error, project_id) {
+            tracing::warn!("Failed to insert error from span event: {}", e);
+        }
+    }
+}
 
 pub fn insert_otlp_batch(
     pool: &DbPool,
@@ -536,6 +631,15 @@ pub fn insert_otlp_batch(
                     ],
                 )?;
                 count += 1;
+
+                // Extract errors from exception events
+                extract_and_insert_errors(
+                    pool,
+                    &otlp_span.events,
+                    &trace_id,
+                    &happened_at,
+                    project_id,
+                );
             }
         }
     }
@@ -835,11 +939,365 @@ pub fn delete_before(pool: &DbPool, before: &str) -> anyhow::Result<usize> {
 pub fn count_since(pool: &DbPool, project_id: Option<i64>, since: &str) -> anyhow::Result<i64> {
     let conn = pool.get()?;
     let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM spans WHERE (?1 IS NULL OR project_id = ?1) AND happened_at >= ?2",
+        "SELECT COUNT(*) FROM spans WHERE parent_span_id IS NULL AND (?1 IS NULL OR project_id = ?1) AND happened_at >= ?2",
         rusqlite::params![project_id, since],
         |row| row.get(0),
     )?;
     Ok(count)
+}
+
+// ============================================================================
+// Dashboard Stats (from root spans)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LatencyStats {
+    pub avg_ms: i64,
+    pub p95_ms: i64,
+    pub p99_ms: i64,
+}
+
+pub fn latency_stats_since(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+) -> anyhow::Result<LatencyStats> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        "SELECT duration_ms FROM spans WHERE parent_span_id IS NULL AND happened_at >= ?1 AND (?2 IS NULL OR project_id = ?2) ORDER BY duration_ms ASC",
+    )?;
+
+    let values: Vec<f64> = stmt
+        .query_map(rusqlite::params![since, project_id], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if values.is_empty() {
+        return Ok(LatencyStats {
+            avg_ms: 0,
+            p95_ms: 0,
+            p99_ms: 0,
+        });
+    }
+
+    let avg = values.iter().sum::<f64>() / values.len() as f64;
+    let p95_idx = ((0.95 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
+    let p99_idx = ((0.99 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
+
+    Ok(LatencyStats {
+        avg_ms: avg.round() as i64,
+        p95_ms: values[p95_idx].round() as i64,
+        p99_ms: values[p99_idx].round() as i64,
+    })
+}
+
+pub fn slow_traces(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    threshold_ms: f64,
+    limit: i64,
+) -> anyhow::Result<Vec<TraceSummary>> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT
+            s.trace_id,
+            s.name as root_span_name,
+            s.root_span_type,
+            s.duration_ms,
+            (SELECT COUNT(*) FROM spans s2 WHERE s2.trace_id = s.trace_id) as span_count,
+            s.status_code,
+            s.service_name,
+            s.http_method,
+            s.http_url,
+            s.http_status_code,
+            strftime('%Y-%m-%d %H:%M', s.happened_at) as happened_at
+        FROM spans s
+        WHERE s.parent_span_id IS NULL
+          AND s.duration_ms >= ?1
+          AND (?2 IS NULL OR s.project_id = ?2)
+        ORDER BY s.duration_ms DESC
+        LIMIT ?3
+        "#,
+    )?;
+
+    let traces = stmt
+        .query_map(rusqlite::params![threshold_ms, project_id, limit], |row| {
+            Ok(TraceSummary {
+                trace_id: row.get(0)?,
+                root_span_name: row.get(1)?,
+                root_span_type: row
+                    .get::<_, Option<String>>(2)?
+                    .and_then(|s| RootSpanType::from_str(&s)),
+                duration_ms: row.get(3)?,
+                span_count: row.get(4)?,
+                status_code: row.get(5)?,
+                service_name: row.get(6)?,
+                http_method: row.get(7)?,
+                http_url: row.get(8)?,
+                http_status_code: row.get(9)?,
+                happened_at: row.get(10)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(traces)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TimeSeriesPoint {
+    pub hour: String,
+    pub count: i64,
+    pub avg_ms: f64,
+    pub error_count: i64,
+}
+
+pub fn hourly_stats(pool: &DbPool, project_id: Option<i64>, hours: i64) -> anyhow::Result<Vec<TimeSeriesPoint>> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT
+            strftime('%Y-%m-%d %H:00', happened_at) as hour,
+            COUNT(*) as count,
+            COALESCE(AVG(duration_ms), 0) as avg_ms,
+            SUM(CASE WHEN status_code = 2 OR http_status_code >= 500 THEN 1 ELSE 0 END) as error_count
+        FROM spans
+        WHERE parent_span_id IS NULL
+          AND (?1 IS NULL OR project_id = ?1)
+          AND happened_at >= datetime('now', '-' || ?2 || ' hours')
+        GROUP BY strftime('%Y-%m-%d %H:00', happened_at)
+        ORDER BY hour ASC
+        "#,
+    )?;
+
+    let points = stmt
+        .query_map(rusqlite::params![project_id, hours], |row| {
+            Ok(TimeSeriesPoint {
+                hour: row.get(0)?,
+                count: row.get(1)?,
+                avg_ms: row.get(2)?,
+                error_count: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(points)
+}
+
+// ============================================================================
+// Routes Stats (aggregated by endpoint)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RouteSummary {
+    pub path: String,
+    pub method: String,
+    pub request_count: i64,
+    pub avg_ms: i64,
+    pub p95_ms: i64,
+    pub p99_ms: i64,
+    pub max_ms: i64,
+    pub min_ms: i64,
+    pub avg_db_ms: i64,
+    pub avg_db_count: i64,
+    pub error_count: i64,
+    pub error_rate: f64,
+}
+
+pub fn routes_summary(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+    search: Option<&str>,
+    sort: &str,
+    limit: i64,
+) -> anyhow::Result<Vec<RouteSummary>> {
+    let conn = pool.get()?;
+
+    // Get unique routes with basic stats
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT
+            COALESCE(name, http_url, 'unknown') as path,
+            COALESCE(http_method, 'GET') as method,
+            COUNT(*) as request_count,
+            AVG(duration_ms) as avg_ms,
+            MAX(duration_ms) as max_ms,
+            MIN(duration_ms) as min_ms,
+            SUM(CASE WHEN status_code = 2 OR http_status_code >= 500 THEN 1 ELSE 0 END) as error_count
+        FROM spans
+        WHERE parent_span_id IS NULL
+          AND root_span_type = 'web'
+          AND (?1 IS NULL OR project_id = ?1)
+          AND happened_at >= ?2
+          AND (?3 IS NULL OR name LIKE '%' || ?3 || '%' OR http_url LIKE '%' || ?3 || '%')
+        GROUP BY COALESCE(name, http_url, 'unknown'), COALESCE(http_method, 'GET')
+        ORDER BY request_count DESC
+        LIMIT ?4
+        "#,
+    )?;
+
+    let routes: Vec<(String, String, i64, f64, f64, f64, i64)> = stmt
+        .query_map(rusqlite::params![project_id, since, search, limit], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut result = Vec::new();
+    for (path, method, request_count, avg_ms, max_ms, min_ms, error_count) in routes {
+        let (p95, p99) = calculate_route_percentiles(&conn, project_id, &path, since)?;
+        let (avg_db_ms, avg_db_count) = calculate_route_db_stats(&conn, project_id, &path, since)?;
+        let error_rate = if request_count > 0 {
+            (error_count as f64 / request_count as f64) * 100.0
+        } else {
+            0.0
+        };
+        result.push(RouteSummary {
+            path,
+            method,
+            request_count,
+            avg_ms: avg_ms.round() as i64,
+            p95_ms: p95,
+            p99_ms: p99,
+            max_ms: max_ms.round() as i64,
+            min_ms: min_ms.round() as i64,
+            avg_db_ms,
+            avg_db_count,
+            error_count,
+            error_rate,
+        });
+    }
+
+    // Sort by requested field
+    match sort {
+        "avg" => result.sort_by(|a, b| b.avg_ms.cmp(&a.avg_ms)),
+        "p95" => result.sort_by(|a, b| b.p95_ms.cmp(&a.p95_ms)),
+        "p99" => result.sort_by(|a, b| b.p99_ms.cmp(&a.p99_ms)),
+        "max" => result.sort_by(|a, b| b.max_ms.cmp(&a.max_ms)),
+        "db" => result.sort_by(|a, b| b.avg_db_ms.cmp(&a.avg_db_ms)),
+        "errors" => result.sort_by(|a, b| b.error_count.cmp(&a.error_count)),
+        _ => {} // default: already sorted by request_count
+    }
+
+    Ok(result)
+}
+
+pub fn routes_count(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    since: &str,
+    search: Option<&str>,
+) -> anyhow::Result<i64> {
+    let conn = pool.get()?;
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(DISTINCT COALESCE(name, http_url, 'unknown') || COALESCE(http_method, 'GET'))
+        FROM spans
+        WHERE parent_span_id IS NULL
+          AND root_span_type = 'web'
+          AND (?1 IS NULL OR project_id = ?1)
+          AND happened_at >= ?2
+          AND (?3 IS NULL OR name LIKE '%' || ?3 || '%' OR http_url LIKE '%' || ?3 || '%')
+        "#,
+        rusqlite::params![project_id, since, search],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+fn calculate_route_percentiles(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    project_id: Option<i64>,
+    path: &str,
+    since: &str,
+) -> anyhow::Result<(i64, i64)> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT duration_ms
+        FROM spans
+        WHERE parent_span_id IS NULL
+          AND COALESCE(name, http_url, 'unknown') = ?1
+          AND (?2 IS NULL OR project_id = ?2)
+          AND happened_at >= ?3
+        ORDER BY duration_ms ASC
+        "#,
+    )?;
+
+    let values: Vec<f64> = stmt
+        .query_map(rusqlite::params![path, project_id, since], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if values.is_empty() {
+        return Ok((0, 0));
+    }
+
+    let p95_idx = ((0.95 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
+    let p99_idx = ((0.99 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
+
+    Ok((values[p95_idx].round() as i64, values[p99_idx].round() as i64))
+}
+
+fn calculate_route_db_stats(
+    conn: &r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>,
+    project_id: Option<i64>,
+    path: &str,
+    since: &str,
+) -> anyhow::Result<(i64, i64)> {
+    // Get all trace_ids for this route
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT trace_id
+        FROM spans
+        WHERE parent_span_id IS NULL
+          AND COALESCE(name, http_url, 'unknown') = ?1
+          AND (?2 IS NULL OR project_id = ?2)
+          AND happened_at >= ?3
+        "#,
+    )?;
+
+    let trace_ids: Vec<String> = stmt
+        .query_map(rusqlite::params![path, project_id, since], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if trace_ids.is_empty() {
+        return Ok((0, 0));
+    }
+
+    // Calculate average DB time and count across these traces
+    let placeholders = trace_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+    let sql = format!(
+        r#"
+        SELECT
+            COALESCE(AVG(db_total_ms), 0) as avg_db_ms,
+            COALESCE(AVG(db_count), 0) as avg_db_count
+        FROM (
+            SELECT
+                trace_id,
+                SUM(duration_ms) as db_total_ms,
+                COUNT(*) as db_count
+            FROM spans
+            WHERE trace_id IN ({})
+              AND span_category = 'db'
+            GROUP BY trace_id
+        )
+        "#,
+        placeholders
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let result: (f64, f64) = stmt.query_row(
+        rusqlite::params_from_iter(trace_ids.iter()),
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok((result.0.round() as i64, result.1.round() as i64))
 }
 
 // ============================================================================

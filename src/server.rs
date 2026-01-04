@@ -45,9 +45,6 @@ pub async fn run(pool: DbPool, config: Config, port: u16) -> anyhow::Result<()> 
         .nest(
             "/ingest",
             Router::new()
-                .route("/requests", post(api::ingest_requests))
-                .route("/errors", post(api::ingest_errors))
-                .route("/errors/batch", post(api::ingest_errors_batch))
                 .route("/deploys", post(api::ingest_deploys))
                 .route("/v1/traces", post(api::ingest_spans))
                 .layer(middleware::from_fn_with_state(
