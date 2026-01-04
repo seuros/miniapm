@@ -32,13 +32,12 @@ pub async fn index(State(pool): State<DbPool>, cookies: Cookies) -> DashboardTem
 
     let requests_24h = span::count_since(&pool, project_id, &since).unwrap_or(0);
     let errors_24h = models::error::count_since(&pool, project_id, &since).unwrap_or(0);
-    let latency_stats = span::latency_stats_since(&pool, project_id, &since).unwrap_or(
-        span::LatencyStats {
+    let latency_stats =
+        span::latency_stats_since(&pool, project_id, &since).unwrap_or(span::LatencyStats {
             avg_ms: 0,
             p95_ms: 0,
             p99_ms: 0,
-        },
-    );
+        });
     let recent_errors = models::error::list(&pool, project_id, Some("open"), 5).unwrap_or_default();
     let slow_requests = span::slow_traces(&pool, project_id, 500.0, 5).unwrap_or_default();
     let hourly_stats = span::hourly_stats(&pool, project_id, 24).unwrap_or_default();

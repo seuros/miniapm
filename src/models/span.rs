@@ -465,7 +465,10 @@ fn extract_and_insert_errors(
             None => continue,
         };
         let message = attrs.get("exception.message").cloned().unwrap_or_default();
-        let stacktrace = attrs.get("exception.stacktrace").cloned().unwrap_or_default();
+        let stacktrace = attrs
+            .get("exception.stacktrace")
+            .cloned()
+            .unwrap_or_default();
         let backtrace: Vec<String> = stacktrace.lines().map(|s| s.to_string()).collect();
 
         // Generate fingerprint from exception type + first backtrace line
@@ -1051,7 +1054,11 @@ pub struct TimeSeriesPoint {
     pub error_count: i64,
 }
 
-pub fn hourly_stats(pool: &DbPool, project_id: Option<i64>, hours: i64) -> anyhow::Result<Vec<TimeSeriesPoint>> {
+pub fn hourly_stats(
+    pool: &DbPool,
+    project_id: Option<i64>,
+    hours: i64,
+) -> anyhow::Result<Vec<TimeSeriesPoint>> {
     let conn = pool.get()?;
     let mut stmt = conn.prepare(
         r#"
@@ -1241,7 +1248,10 @@ fn calculate_route_percentiles(
     let p95_idx = ((0.95 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
     let p99_idx = ((0.99 * (values.len() as f64 - 1.0)).round() as usize).min(values.len() - 1);
 
-    Ok((values[p95_idx].round() as i64, values[p99_idx].round() as i64))
+    Ok((
+        values[p95_idx].round() as i64,
+        values[p99_idx].round() as i64,
+    ))
 }
 
 fn calculate_route_db_stats(
@@ -1292,10 +1302,10 @@ fn calculate_route_db_stats(
     );
 
     let mut stmt = conn.prepare(&sql)?;
-    let result: (f64, f64) = stmt.query_row(
-        rusqlite::params_from_iter(trace_ids.iter()),
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?;
+    let result: (f64, f64) = stmt
+        .query_row(rusqlite::params_from_iter(trace_ids.iter()), |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
 
     Ok((result.0.round() as i64, result.1.round() as i64))
 }

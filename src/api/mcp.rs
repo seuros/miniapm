@@ -164,15 +164,9 @@ fn handle_tool_call(
                 "30d" => Utc::now() - Duration::days(30),
                 _ => Utc::now() - Duration::hours(24),
             };
-            let routes = models::span::routes_summary(
-                pool,
-                None,
-                &since.to_rfc3339(),
-                None,
-                "avg",
-                limit,
-            )
-            .map_err(|e| e.to_string())?;
+            let routes =
+                models::span::routes_summary(pool, None, &since.to_rfc3339(), None, "avg", limit)
+                    .map_err(|e| e.to_string())?;
             serde_json::to_value(routes).map_err(|e| e.to_string())?
         }
         "system_status" => {
