@@ -1079,7 +1079,7 @@ pub fn hourly_stats(
         "#,
     )?;
 
-    let points = stmt
+    let data_points: std::collections::HashMap<String, TimeSeriesPoint> = stmt
         .query_map(rusqlite::params![project_id, hours], |row| {
             Ok(TimeSeriesPoint {
                 hour: row.get(0)?,
@@ -1088,7 +1088,27 @@ pub fn hourly_stats(
                 error_count: row.get(3)?,
             })
         })?
-        .collect::<Result<Vec<_>, _>>()?;
+        .filter_map(|r| r.ok())
+        .map(|p| (p.hour.clone(), p))
+        .collect();
+
+    // Fill in all hours with zeros for missing data
+    let mut points = Vec::with_capacity(hours as usize);
+    for i in (0..hours).rev() {
+        let hour = chrono::Utc::now() - chrono::Duration::hours(i);
+        let hour_key = hour.format("%Y-%m-%d %H:00").to_string();
+        points.push(
+            data_points
+                .get(&hour_key)
+                .cloned()
+                .unwrap_or_else(|| TimeSeriesPoint {
+                    hour: hour_key,
+                    count: 0,
+                    avg_ms: 0.0,
+                    error_count: 0,
+                }),
+        );
+    }
 
     Ok(points)
 }
