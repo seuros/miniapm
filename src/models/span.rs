@@ -1101,7 +1101,7 @@ pub fn hourly_stats(
             data_points
                 .get(&hour_key)
                 .cloned()
-                .unwrap_or_else(|| TimeSeriesPoint {
+                .unwrap_or(TimeSeriesPoint {
                     hour: hour_key,
                     count: 0,
                     avg_ms: 0.0,
