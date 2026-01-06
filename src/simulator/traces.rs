@@ -1,5 +1,5 @@
 use rand::Rng;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::routes::Route;
 
@@ -8,8 +8,8 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
     let mut rng = rand::thread_rng();
 
     // Generate IDs
-    let trace_id = format!("{:032x}", rng.gen::<u128>());
-    let root_span_id = format!("{:016x}", rng.gen::<u64>());
+    let trace_id = format!("{:032x}", rng.r#gen::<u128>());
+    let root_span_id = format!("{:016x}", rng.r#gen::<u64>());
 
     // Timestamps in nanoseconds
     let now_ns = std::time::SystemTime::now()
@@ -22,7 +22,7 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
     let mut spans = Vec::new();
 
     // Root span (HTTP server)
-    let status_code = if rng.gen::<f64>() < 0.05 { 500 } else { 200 };
+    let status_code = if rng.r#gen::<f64>() < 0.05 { 500 } else { 200 };
     spans.push(json!({
         "traceId": trace_id,
         "spanId": root_span_id,
@@ -48,8 +48,8 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
     let avg_query_ms = db_ms / db_queries as f64;
 
     for i in 0..db_queries {
-        let span_id = format!("{:016x}", rng.gen::<u64>());
-        let query_ms = avg_query_ms * (0.5 + rng.gen::<f64>());
+        let span_id = format!("{:016x}", rng.r#gen::<u64>());
+        let query_ms = avg_query_ms * (0.5 + rng.r#gen::<f64>());
         let query_start = start_ns + (current_offset * 1_000_000.0) as i64;
         let query_end = query_start + (query_ms * 1_000_000.0) as i64;
 
@@ -78,8 +78,8 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
 
         // Occasionally add an Elasticsearch query for search routes
         if route.path.contains("search") && i == 0 {
-            let es_span_id = format!("{:016x}", rng.gen::<u64>());
-            let es_ms = 20.0 + rng.gen::<f64>() * 80.0;
+            let es_span_id = format!("{:016x}", rng.r#gen::<u64>());
+            let es_ms = 20.0 + rng.r#gen::<f64>() * 80.0;
             let es_start = query_end;
             let es_end = es_start + (es_ms * 1_000_000.0) as i64;
 
@@ -104,7 +104,7 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
 
     // Generate view rendering spans
     if view_ms > 0.0 {
-        let view_span_id = format!("{:016x}", rng.gen::<u64>());
+        let view_span_id = format!("{:016x}", rng.r#gen::<u64>());
         let view_start = end_ns - (view_ms * 1_000_000.0) as i64;
 
         let template = match route.action {
@@ -143,7 +143,7 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
         let mut partial_offset = view_start;
 
         for partial in partials {
-            let partial_span_id = format!("{:016x}", rng.gen::<u64>());
+            let partial_span_id = format!("{:016x}", rng.r#gen::<u64>());
             let partial_end = partial_offset + (partial_ms * 1_000_000.0) as i64;
 
             spans.push(json!({
@@ -164,9 +164,9 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
     }
 
     // Occasionally add HTTP client call (external API)
-    if rng.gen::<f64>() < 0.15 {
-        let http_span_id = format!("{:016x}", rng.gen::<u64>());
-        let http_ms = 30.0 + rng.gen::<f64>() * 150.0;
+    if rng.r#gen::<f64>() < 0.15 {
+        let http_span_id = format!("{:016x}", rng.r#gen::<u64>());
+        let http_ms = 30.0 + rng.r#gen::<f64>() * 150.0;
         let http_start = start_ns + ((total_ms * 0.3) * 1_000_000.0) as i64;
         let http_end = http_start + (http_ms * 1_000_000.0) as i64;
 
@@ -214,8 +214,8 @@ pub fn generate_web_trace(route: &Route, total_ms: f64, db_ms: f64, view_ms: f64
 pub fn generate_job_trace() -> Value {
     let mut rng = rand::thread_rng();
 
-    let trace_id = format!("{:032x}", rng.gen::<u128>());
-    let root_span_id = format!("{:016x}", rng.gen::<u64>());
+    let trace_id = format!("{:032x}", rng.r#gen::<u128>());
+    let root_span_id = format!("{:016x}", rng.r#gen::<u64>());
 
     let jobs = [
         ("OrderMailer", "confirmation_email", 150.0, 3),
@@ -227,7 +227,7 @@ pub fn generate_job_trace() -> Value {
     ];
 
     let (job_class, method, base_ms, db_queries) = jobs[rng.gen_range(0..jobs.len())];
-    let total_ms = base_ms * (0.7 + rng.gen::<f64>() * 0.6);
+    let total_ms = base_ms * (0.7 + rng.r#gen::<f64>() * 0.6);
 
     let now_ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -260,8 +260,8 @@ pub fn generate_job_trace() -> Value {
     let mut offset = 0.0;
 
     for _ in 0..db_queries {
-        let span_id = format!("{:016x}", rng.gen::<u64>());
-        let query_ms = avg_query_ms * (0.5 + rng.gen::<f64>());
+        let span_id = format!("{:016x}", rng.r#gen::<u64>());
+        let query_ms = avg_query_ms * (0.5 + rng.r#gen::<f64>());
         let query_start = start_ns + (offset * 1_000_000.0) as i64;
         let query_end = query_start + (query_ms * 1_000_000.0) as i64;
 
@@ -291,8 +291,8 @@ pub fn generate_job_trace() -> Value {
 
     // HTTP client call for mailer/webhook jobs
     if job_class.contains("Mailer") || job_class.contains("Webhook") {
-        let span_id = format!("{:016x}", rng.gen::<u64>());
-        let http_ms = 50.0 + rng.gen::<f64>() * 100.0;
+        let span_id = format!("{:016x}", rng.r#gen::<u64>());
+        let http_ms = 50.0 + rng.r#gen::<f64>() * 100.0;
         let http_start = start_ns + ((total_ms * 0.5) * 1_000_000.0) as i64;
         let http_end = http_start + (http_ms * 1_000_000.0) as i64;
 
@@ -339,8 +339,8 @@ pub fn generate_job_trace() -> Value {
 pub fn generate_rake_trace() -> Value {
     let mut rng = rand::thread_rng();
 
-    let trace_id = format!("{:032x}", rng.gen::<u128>());
-    let root_span_id = format!("{:016x}", rng.gen::<u64>());
+    let trace_id = format!("{:032x}", rng.r#gen::<u128>());
+    let root_span_id = format!("{:016x}", rng.r#gen::<u64>());
 
     let tasks = [
         ("db:migrate", 2000.0, 15),
@@ -351,7 +351,7 @@ pub fn generate_rake_trace() -> Value {
     ];
 
     let (task_name, base_ms, db_queries) = tasks[rng.gen_range(0..tasks.len())];
-    let total_ms = base_ms * (0.8 + rng.gen::<f64>() * 0.4);
+    let total_ms = base_ms * (0.8 + rng.r#gen::<f64>() * 0.4);
 
     let now_ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -380,8 +380,8 @@ pub fn generate_rake_trace() -> Value {
     let mut offset = 0.0;
 
     for _ in 0..db_queries {
-        let span_id = format!("{:016x}", rng.gen::<u64>());
-        let query_ms = avg_query_ms * (0.3 + rng.gen::<f64>() * 1.4);
+        let span_id = format!("{:016x}", rng.r#gen::<u64>());
+        let query_ms = avg_query_ms * (0.3 + rng.r#gen::<f64>() * 1.4);
         let query_start = start_ns + (offset * 1_000_000.0) as i64;
         let query_end = query_start + (query_ms * 1_000_000.0) as i64;
 
@@ -459,19 +459,19 @@ fn pick_partials<R: Rng>(rng: &mut R, route: &Route) -> Vec<String> {
     let base = route.controller.to_lowercase().replace("::", "/");
     let mut partials = Vec::new();
 
-    if rng.gen::<f64>() < 0.7 {
+    if rng.r#gen::<f64>() < 0.7 {
         partials.push("shared/_header.html.erb".to_string());
     }
-    if rng.gen::<f64>() < 0.8 {
+    if rng.r#gen::<f64>() < 0.8 {
         partials.push("shared/_navigation.html.erb".to_string());
     }
-    if route.action == "index" && rng.gen::<f64>() < 0.9 {
+    if route.action == "index" && rng.r#gen::<f64>() < 0.9 {
         partials.push(format!("{}/_item.html.erb", base));
     }
-    if route.action == "show" && rng.gen::<f64>() < 0.6 {
+    if route.action == "show" && rng.r#gen::<f64>() < 0.6 {
         partials.push(format!("{}/_details.html.erb", base));
     }
-    if rng.gen::<f64>() < 0.5 {
+    if rng.r#gen::<f64>() < 0.5 {
         partials.push("shared/_footer.html.erb".to_string());
     }
 

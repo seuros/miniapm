@@ -1,18 +1,18 @@
 use askama::Template;
 use axum::extract::State;
-use axum::http::header::HOST;
 use axum::http::Request;
+use axum::http::header::HOST;
 use tower_cookies::Cookies;
 
 use crate::{
+    DbPool,
     models::{
         deploy::{self, Deploy},
         project,
     },
-    DbPool,
 };
 
-use super::project_context::{get_project_context, WebProjectContext};
+use super::project_context::{WebProjectContext, get_project_context};
 
 #[derive(Template)]
 #[template(path = "deploys/index.html")]

@@ -39,8 +39,8 @@ pub fn simulate_latency(base_ms: f64) -> f64 {
     let mut rng = rand::thread_rng();
 
     // Box-Muller transform for normal distribution
-    let u1: f64 = rng.gen();
-    let u2: f64 = rng.gen();
+    let u1: f64 = rng.r#gen();
+    let u2: f64 = rng.r#gen();
     let normal = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos();
 
     // Log-normal: exp(normal * sigma + mu)
@@ -55,7 +55,7 @@ pub fn simulate_db_time(total_ms: f64) -> f64 {
     let mut rng = rand::thread_rng();
 
     // DB typically 40-70% of request time
-    let ratio = 0.4 + rng.gen::<f64>() * 0.3;
+    let ratio = 0.4 + rng.r#gen::<f64>() * 0.3;
     total_ms * ratio
 }
 
@@ -64,5 +64,5 @@ pub fn simulate_view_time(total_ms: f64, db_ms: f64) -> f64 {
     let mut rng = rand::thread_rng();
 
     let remaining = total_ms - db_ms;
-    remaining * (0.6 + rng.gen::<f64>() * 0.3)
+    remaining * (0.6 + rng.r#gen::<f64>() * 0.3)
 }

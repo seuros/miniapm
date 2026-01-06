@@ -38,7 +38,7 @@ impl Config {
             }
             // In single-user mode, generate a random secret per run
             use rand::Rng;
-            let bytes: [u8; 32] = rand::thread_rng().gen();
+            let bytes: [u8; 32] = rand::thread_rng().r#gen();
             hex::encode(bytes)
         });
 

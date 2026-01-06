@@ -37,13 +37,13 @@ pub async fn run(
         let total_ms = patterns::simulate_latency(route.base_ms);
         let db_ms = patterns::simulate_db_time(total_ms);
         let view_ms = patterns::simulate_view_time(total_ms, db_ms);
-        let status = if rng.gen::<f64>() < error_rate {
+        let status = if rng.r#gen::<f64>() < error_rate {
             500
         } else {
             200
         };
 
-        let request_id = format!("{:032x}", rng.gen::<u128>());
+        let request_id = format!("{:032x}", rng.r#gen::<u128>());
         let timestamp = Utc::now().to_rfc3339();
 
         // Send request
@@ -102,7 +102,7 @@ pub async fn run(
             .await;
 
         // Occasionally send background job traces (10% chance)
-        if rng.gen::<f64>() < 0.10 {
+        if rng.r#gen::<f64>() < 0.10 {
             let job_trace = traces::generate_job_trace();
             let _ = client
                 .post(format!("{}/v1/traces", url))
@@ -114,7 +114,7 @@ pub async fn run(
         }
 
         // Rarely send rake task traces (1% chance)
-        if rng.gen::<f64>() < 0.01 {
+        if rng.r#gen::<f64>() < 0.01 {
             let rake_trace = traces::generate_rake_trace();
             let _ = client
                 .post(format!("{}/v1/traces", url))
@@ -126,9 +126,9 @@ pub async fn run(
         }
 
         // Maybe send an error
-        if rng.gen::<f64>() < error_rate {
+        if rng.r#gen::<f64>() < error_rate {
             let error = routes::pick_random_error();
-            let message = error.message.replace("{}", &rng.gen::<u32>().to_string());
+            let message = error.message.replace("{}", &rng.r#gen::<u32>().to_string());
 
             // Generate fingerprint
             let mut hasher = Sha256::new();
@@ -234,7 +234,7 @@ pub async fn backfill(config: &Config, days: u32, requests_per_day: u32) -> anyh
                 let view_ms = patterns::simulate_view_time(total_ms, db_ms);
 
                 batch.push(serde_json::json!({
-                    "request_id": format!("{:032x}", rng.gen::<u128>()),
+                    "request_id": format!("{:032x}", rng.r#gen::<u128>()),
                     "method": route.method,
                     "path": route.path,
                     "controller": route.controller,

@@ -1,4 +1,4 @@
-use crate::{models, DbPool};
+use crate::{DbPool, models};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};

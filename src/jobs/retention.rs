@@ -1,7 +1,7 @@
 use crate::{
+    DbPool,
     config::Config,
     models::{self, deploy},
-    DbPool,
 };
 use chrono::{Duration, Utc};
 

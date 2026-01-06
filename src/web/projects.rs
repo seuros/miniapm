@@ -1,15 +1,15 @@
 use askama::Template;
 use axum::{
+    Form,
     extract::{Query, State},
     response::{IntoResponse, Redirect},
-    Form,
 };
 use serde::Deserialize;
 use tower_cookies::{Cookie, Cookies};
 
-use crate::{models::project, DbPool};
+use crate::{DbPool, models::project};
 
-use super::project_context::{get_project_context, WebProjectContext, PROJECT_COOKIE};
+use super::project_context::{PROJECT_COOKIE, WebProjectContext, get_project_context};
 
 #[derive(Template)]
 #[template(path = "projects/index.html")]

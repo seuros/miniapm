@@ -5,9 +5,9 @@ use axum::{
 };
 use tower_cookies::Cookies;
 
-use crate::{models::project, DbPool};
+use crate::{DbPool, models::project};
 
-use super::project_context::{get_project_context, WebProjectContext};
+use super::project_context::{WebProjectContext, get_project_context};
 
 #[derive(Template)]
 #[template(path = "api_key/index.html")]
@@ -39,10 +39,10 @@ pub async fn regenerate(State(pool): State<DbPool>) -> impl IntoResponse {
 mod tests {
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::{Request, StatusCode},
         routing::{get, post},
-        Router,
     };
     use r2d2::Pool;
     use r2d2_sqlite::SqliteConnectionManager;

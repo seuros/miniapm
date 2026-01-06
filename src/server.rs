@@ -1,15 +1,15 @@
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     middleware,
     routing::{get, post},
-    Router,
 };
 use std::net::SocketAddr;
 use tokio::signal;
 use tower_cookies::CookieManagerLayer;
 use tower_http::trace::TraceLayer;
 
-use crate::{api, config::Config, jobs, models, web, DbPool};
+use crate::{DbPool, api, config::Config, jobs, models, web};
 
 /// Combined state for routes that need both pool and config
 #[derive(Clone)]

@@ -1,7 +1,7 @@
 mod retention;
 mod rollup;
 
-use crate::{config::Config, models, DbPool};
+use crate::{DbPool, config::Config, models};
 use std::time::Duration;
 use tokio::time::interval;
 

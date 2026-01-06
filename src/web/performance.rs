@@ -4,9 +4,9 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tower_cookies::Cookies;
 
-use crate::{models::span, DbPool};
+use crate::{DbPool, models::span};
 
-use super::project_context::{get_project_context, WebProjectContext};
+use super::project_context::{WebProjectContext, get_project_context};
 
 #[derive(Template)]
 #[template(path = "performance/index.html")]
