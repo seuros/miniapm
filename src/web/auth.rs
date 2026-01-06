@@ -8,9 +8,9 @@ use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::Deserialize;
 use time::Duration;
 
-use crate::{config::Config, models, DbPool};
+use crate::{DbPool, config::Config, models};
 
-use super::project_context::{get_project_context, WebProjectContext};
+use super::project_context::{WebProjectContext, get_project_context};
 
 const SESSION_COOKIE: &str = "miniapm_session";
 

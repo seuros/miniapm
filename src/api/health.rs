@@ -1,8 +1,8 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{Json, extract::State, http::StatusCode};
 use serde::Serialize;
 use std::time::Instant;
 
-use crate::{db, DbPool};
+use crate::{DbPool, db};
 
 static START_TIME: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 

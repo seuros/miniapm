@@ -1,10 +1,10 @@
-use axum::{extract::State, http::StatusCode, Extension, Json};
+use axum::{Extension, Json, extract::State, http::StatusCode};
 use serde::Deserialize;
 
 use crate::{
+    DbPool,
     api::auth::ProjectContext,
     models::{deploy, error as app_error, span},
-    DbPool,
 };
 
 #[derive(Debug, Deserialize)]

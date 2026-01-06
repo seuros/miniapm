@@ -10,9 +10,8 @@ mod projects;
 mod traces;
 
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{get, post},
-    Router,
 };
 
 use crate::DbPool;

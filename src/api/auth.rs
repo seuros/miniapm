@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{header, Request, StatusCode},
+    http::{Request, StatusCode, header},
     middleware::Next,
     response::Response,
 };
@@ -48,11 +48,11 @@ pub async fn auth_middleware(
 mod tests {
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::{Request, StatusCode},
         middleware,
         routing::get,
-        Router,
     };
     use r2d2::Pool;
     use r2d2_sqlite::SqliteConnectionManager;

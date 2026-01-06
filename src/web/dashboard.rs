@@ -4,11 +4,11 @@ use chrono::{Duration, Utc};
 use tower_cookies::Cookies;
 
 use crate::{
-    models::{self, deploy::Deploy, span},
     DbPool,
+    models::{self, deploy::Deploy, span},
 };
 
-use super::project_context::{get_project_context, WebProjectContext};
+use super::project_context::{WebProjectContext, get_project_context};
 
 #[derive(Template)]
 #[template(path = "dashboard.html")]

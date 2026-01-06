@@ -4,9 +4,9 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use tower_cookies::Cookies;
 
-use crate::{models, DbPool};
+use crate::{DbPool, models};
 
-use super::project_context::{get_project_context, WebProjectContext};
+use super::project_context::{WebProjectContext, get_project_context};
 
 const PAGE_SIZE: i64 = 50;
 

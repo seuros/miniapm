@@ -17,7 +17,7 @@ pub fn create(pool: &DbPool, name: &str) -> anyhow::Result<String> {
     let conn = pool.get()?;
 
     // Generate random key
-    let random_bytes: [u8; 24] = rand::thread_rng().gen();
+    let random_bytes: [u8; 24] = rand::thread_rng().r#gen();
     let raw_key = format!("{}{}", PREFIX, hex::encode(random_bytes));
     let key_hash = hash_key(&raw_key);
 

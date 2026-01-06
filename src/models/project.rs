@@ -15,7 +15,7 @@ pub struct Project {
 /// Generate a random API key for a project
 fn generate_api_key() -> String {
     let mut rng = rand::thread_rng();
-    let bytes: [u8; 24] = rng.gen();
+    let bytes: [u8; 24] = rng.r#gen();
     format!("proj_{}", hex::encode(bytes))
 }
 

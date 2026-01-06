@@ -1,7 +1,7 @@
 use crate::DbPool;
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::{Duration, Utc};
 use rand::Rng;
@@ -55,7 +55,7 @@ pub fn verify_password(password: &str, hash: &str) -> bool {
 /// Generate a random session token
 fn generate_token() -> String {
     let mut rng = rand::thread_rng();
-    let bytes: [u8; 32] = rng.gen();
+    let bytes: [u8; 32] = rng.r#gen();
     hex::encode(bytes)
 }
 
@@ -283,7 +283,7 @@ pub fn find(pool: &DbPool, id: i64) -> anyhow::Result<Option<User>> {
 /// Generate an invite token (12 bytes = 24 hex chars, short but secure)
 pub fn generate_invite_token() -> String {
     let mut rng = rand::thread_rng();
-    let bytes: [u8; 12] = rng.gen();
+    let bytes: [u8; 12] = rng.r#gen();
     hex::encode(bytes)
 }
 

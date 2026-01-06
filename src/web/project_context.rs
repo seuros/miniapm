@@ -1,6 +1,6 @@
 use tower_cookies::Cookies;
 
-use crate::{models::project::Project, DbPool};
+use crate::{DbPool, models::project::Project};
 
 pub const PROJECT_COOKIE: &str = "miniapm_project";
 

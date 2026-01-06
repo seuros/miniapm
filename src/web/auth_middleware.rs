@@ -8,7 +8,7 @@ use axum::{
 use axum_extra::extract::cookie::CookieJar;
 use std::env;
 
-use crate::{models, DbPool};
+use crate::{DbPool, models};
 
 const SESSION_COOKIE: &str = "miniapm_session";
 

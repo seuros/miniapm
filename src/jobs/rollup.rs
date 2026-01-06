@@ -1,4 +1,4 @@
-use crate::{models::rollup, DbPool};
+use crate::{DbPool, models::rollup};
 use chrono::{Duration, Utc};
 
 pub fn hourly(pool: &DbPool) -> anyhow::Result<()> {
