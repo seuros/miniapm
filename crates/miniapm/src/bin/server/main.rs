@@ -3,7 +3,7 @@ use miniapm::{config::Config, db, server};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
-#[command(name = "miniapm-server")]
+#[command(name = "miniapm")]
 #[command(about = "MiniAPM Server", version)]
 struct Cli {
     #[arg(short, long, default_value = "3000")]
